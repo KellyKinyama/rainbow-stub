@@ -25,6 +25,11 @@ Last updated: **2026-09-09**.
   - 3 unit + 3 integration tests
 - **UAT** — [UAT.md](UAT.md), 2026-09-09, pass, 14 HTTP requests, 0 errors
 
+> Wondering how this stacks up against WhatsApp / MS Teams? See **[§ 4](#4-product-parity--the-whatsappteams-gap)**
+> for a feature grid, effort estimates by target ("full chat" / "small-team" /
+> "WhatsApp-tier" / "Teams-tier"), and the closing-the-gap sequences in
+> **[§ 8](#8-my-picks-if-you-only-do-one-thing-next)**.
+
 ---
 
 ## 1. Highest ROI — closes UAT gaps
@@ -103,50 +108,247 @@ Last updated: **2026-09-09**.
 
 ---
 
-## 4. Nice-to-haves
+## 4. Product parity — the WhatsApp/Teams gap
 
-### 4.1 · XEP-0308 message correction (M) — ⬜
+This is the strategic framing for everything below. Where we are on the
+messaging pyramid today, and roughly how far each layer is:
+
+```
+         ┌─────────────────────────────────────────┐
+         │ Business platform (Teams-only)          │  ≈ 0%
+         │ - Copilot, meetings, calendar,          │
+         │   tabs SDK, external federation         │
+         ├─────────────────────────────────────────┤
+         │ Voice/video calling & meetings          │  ≈ 0%
+         │ - P2P audio/video, group meetings,      │
+         │   screen share, recording, background   │
+         ├─────────────────────────────────────────┤
+         │ Rich chat UX                            │  ≈ 15%
+         │ - reactions, edits, threads, replies,   │
+         │   voice notes, previews, search, sync   │
+         ├─────────────────────────────────────────┤
+         │ Reliability / scale / operations        │  ≈ 10%
+         │ - federation, sharding, HA, DR,         │
+         │   push notifications, offline queue     │
+         ├─────────────────────────────────────────┤
+         │ Security & compliance                   │  ≈ 5%
+         │ - E2E encryption, retention, DLP,       │
+         │   audit, SOC2/HIPAA/GDPR                │
+         ├─────────────────────────────────────────┤
+         │ Chat backbone                           │  ≈ 85%   ← we are here
+         │ - login, roster, 1:1 chat, groups,      │
+         │   presence, MAM history, receipts, SM   │
+         └─────────────────────────────────────────┘
+```
+
+### 4.1 Feature grid (condensed)
+
+Legend: ✅ done · 🟡 partial (wire ready, UI missing) · ⬜ missing
+
+| Capability | WhatsApp | Teams | Us |
+|---|---|---|---|
+| 1:1 text chat | ✅ | ✅ | ✅ |
+| Group chat | ✅ | ✅ | ✅ (bubbles) |
+| Presence | 🟡 | ✅ | ✅ |
+| Typing indicators | ✅ | ✅ | 🟡 wire ready |
+| Delivery / read receipts | ✅ | ✅ | 🟡 wire ready |
+| Message edit / delete | ✅ | ✅ | ⬜ |
+| Reactions | ✅ | ✅ | ⬜ |
+| Threads / quoted replies | 🟡 | ✅ | ⬜ |
+| File attachments | ✅ | ✅ | 🟡 REST ready, no UI |
+| Media previews / thumbnails | ✅ | ✅ | ⬜ |
+| Voice notes | ✅ | ✅ | ⬜ |
+| Message search | ✅ | ✅ | 🟡 MAM query works, no UI |
+| Server history (MAM) | ✅ | ✅ | ✅ |
+| @mentions + notifications | ✅ | ✅ | ⬜ |
+| Push notifications | ✅ | ✅ | ⬜ (deferred § 6.3) |
+| Voice calls | ✅ | ✅ | ⬜ (deferred § 6.1) |
+| Video calls | ✅ | ✅ | ⬜ |
+| Meetings + recording + transcription | — | ✅ | ⬜ (§ 6.5) |
+| Screen share | ⬜ | ✅ | ⬜ |
+| E2E encryption | ✅ | 🟡 | ⬜ (§ 6.4) |
+| Retention + DLP + audit | ⬜ | ✅ | ⬜ (§ 6.6) |
+| Admin console + SSO | ⬜ | ✅ | ⬜ (§ 6.6) |
+| Horizontal scale | ✅ | ✅ | ⬜ (§ 6.7) |
+| Global media CDN | ✅ | ✅ | ⬜ (§ 6.8) |
+| Multi-device sync (linked) | ✅ | ✅ | 🟡 XMPP resources work; no synced read state |
+| iOS / Android clients | ✅ | ✅ | ⬜ (§ 5.4 Android target) |
+| Web + Desktop clients | ✅ | ✅ | 🟡 Windows + Web builds work |
+
+### 4.2 Effort ladder — how far from each target
+
+Rough calendar for one senior full-stack dev, no team politics.
+
+| Target | What it adds on top of today | Estimate |
+|---|---|---|
+| **"Full-featured chat"** (Signal/Element-tier) | edits, reactions, threads, files UI, push, search, voice notes, media previews, **E2E encryption** | **~2–4 months** |
+| **"Small-team collaboration"** (Slack MVP-tier) | + channels/permissions, @mentions, integrations, retention, admin | **+ 2–3 months** |
+| **"WhatsApp-tier consumer chat"** | + voice/video calling, backup/restore, multi-device sync, iOS/Android polish, spam controls, phone identity | **~6–9 months from today** |
+| **"Teams-tier enterprise collaboration"** | + meetings + recording + transcription, SSO/MFA, admin console, files/SharePoint-like, apps SDK, compliance controls | **~2–3 years for parity** |
+
+### 4.3 What we already have that's competitive
+
+- **Standards-compliant XMPP** (SASL, resource binding, SM, carbons, MAM+RSM, MUC light, ping, disco). Same wire the enterprise CPaaS vendors ship. That's the hardest single piece of a Teams-lite to get right, and it's done.
+- **Observability from day one** — JSON structured logs + Prometheus `/metrics`. Most chat products don't have this at v0.1.
+- **Hardened server-side** — stanza size caps, queue caps, SASL failure limits, MAM auth, XXE guard, HSTS. Not amateur.
+- **Multi-platform client from one codebase** (Flutter Windows + Web + trivial Android/iOS).
+
+### 4.4 What today's stack is honestly good for
+
+- ✅ **CPaaS-SDK dev backend** (its stated purpose) — production-shape.
+- ✅ **Internal chat backbone** — say, a 50-person dispatch board, IoT device chat, or a support-ticket-with-conversation product — with modest additions from § 5.
+- ✅ **XMPP research testbed** — great for protocol experiments and load testing.
+- ⬜ Consumer-facing chat — no push, no E2E, no calls, no scale (§ 6.3, § 6.4, § 6.1, § 6.7).
+- ⬜ Enterprise collaboration — no admin, no SSO, no compliance, no meetings (§ 6.5, § 6.6).
+
+---
+
+## 5. Nice-to-haves
+
+### 5.1 · XEP-0308 message correction (M) — ⬜
 
 - **What:** Server: forward `<replace id="orig">` payload; update the stored message in the messages table. Client: long-press → edit; render corrected messages with an "edited" badge.
 - **Acceptance:** Alice edits a sent message; Bob's UI updates in place without duplicate bubbles.
+- **Parity:** Closes "Message edit / delete" gap vs. WhatsApp + Teams.
 
-### 4.2 · XEP-0198 SM in the Flutter client (M) — ⬜
+### 5.2 · XEP-0198 SM in the Flutter client (M) — ⬜
 
 - **What:** After bind, send `<enable resume="true"/>`; track `hIn`/`hOut`; on WS drop, reconnect and send `<resume previd=… h=…/>`.
 - **Where:** `lib/rainbow/xmpp_client.dart`.
 - **Acceptance:** Toggle the OS wifi off/on mid-chat; messages resume delivery without a full re-login. Server's `SmRegistry.claim()` returns non-null on the resume.
 - **Depends on:** nothing; server support already lives in [lib/src/xmpp/session.dart](lib/src/xmpp/session.dart).
 
-### 4.3 · Dark mode / theme toggle (S) — ⬜
+### 5.3 · Dark mode / theme toggle (S) — ⬜
 
 - **What:** Add `ThemeMode` state to `RainbowSession`; wire from the profile menu.
 - **Acceptance:** Setting persists across app restarts (SharedPreferences).
 
-### 4.4 · Android target (M) — ⬜
+### 5.4 · Android target (M) — ⬜
 
 - **What:** `flutter create --platforms=android .` in the consumer; add `--dart-define=RAINBOW_HOST=10.0.2.2` support in `AppConfig.dev`; document cert-trust flow (already partially in [RUNBOOK § 4c](RUNBOOK.md#4c-android-emulator)).
 - **Acceptance:** Login screen renders on an Android emulator hitting the host-machine stub.
+- **Parity:** Closes "iOS / Android clients" gap for Android.
+
+### 5.5 · Message reactions (M) — ⬜
+
+- **What:** XEP-0444 `<reactions xmlns="urn:xmpp:reactions:0">`. Server: forward + persist a reactions column keyed by message id. Client: emoji picker over a long-press.
+- **Acceptance:** Alice long-presses Bob's message → picks 👍 → both sessions render the reaction with a count.
+- **Parity:** Closes "Reactions" gap vs. WhatsApp + Teams.
+
+### 5.6 · Delivery + read receipts UI surface (S) — ⬜
+
+- **What:** The wire already forwards XEP-0184 receipts and XEP-0333 chat markers. All that's missing is rendering the ✓ / ✓✓ / read state in the chat bubble.
+- **Where:** `lib/ui/chat_page.dart`, `ChatMessage` model.
+- **Acceptance:** Sending a message shows single check; ✓✓ when server confirms; blue ✓✓ when peer session sends `<displayed/>`.
+
+### 5.7 · Typing indicator UI surface (S) — ⬜
+
+- **What:** Wire already relays chat-states (`<composing/>`, `<paused/>`). Missing is rendering "…is typing" in the chat header.
+- **Where:** `lib/rainbow/xmpp_client.dart` (expose `TypingEvent`), `lib/ui/chat_page.dart`.
+- **Acceptance:** Peer starts typing → chat header shows "typing…" within 500 ms; clears within 5 s of last keystroke.
+
+### 5.8 · Threads / quoted replies (M) — ⬜
+
+- **What:** XEP-0461 `<reply xmlns="urn:xmpp:reply:0" id="orig" to="jid"/>` plus a quoted-body render.
+- **Acceptance:** Long-press a message → "Reply" → composer shows a quoted snippet; peers render the reply as a nested card.
+- **Parity:** Closes "Threads / quoted replies" gap vs. Teams and matches WhatsApp's quote-reply.
+
+### 5.9 · Message search UI (M) — ⬜
+
+- **What:** Full-text search over local message store + server-side MAM `<query with … full-text>`. Simple search bar on the Contacts/Bubbles tabs.
+- **Depends on:** § 1.3 local message persistence.
+- **Acceptance:** Type a substring → results list groups matches by conversation with highlighted snippets.
+- **Parity:** Closes "Message search" gap vs. WhatsApp + Teams.
+
+### 5.10 · @mentions + local notifications (M) — ⬜
+
+- **What:** Parse `@userId` (or `@nickname` for MUC), highlight in body, deliver a system notification if the app is backgrounded. Server side already has the message; only the parsing + local notification is new.
+- **Acceptance:** In a bubble, alice types "@bob" → bob's client shows a distinct highlight + notification badge on the tab.
+- **Parity:** Closes "@mentions + notifications" gap.
+
+### 5.11 · Media previews / thumbnails (M) — ⬜
+
+- **What:** Server: generate + serve thumbnails for image/video file descriptors (256×256 max). Client: render inline preview in the chat bubble with tap-to-open.
+- **Depends on:** § 1.2 file upload UI.
+- **Acceptance:** Attaching a JPG shows a compressed preview inline; attaching a PDF shows a filename+size card.
+- **Parity:** Closes "Media previews / thumbnails" gap.
+
+### 5.12 · Voice notes (M–L) — ⬜
+
+- **What:** Client: hold-to-record button captures audio (Opus @ 24 kbps), uploads via existing file endpoint, sends a `<message>` with a `<audio-descriptor/>` payload. Server: persist as a file descriptor with a `duration_ms` field.
+- **Acceptance:** Press-and-hold to record a 5 s clip → releases → sent → recipient sees a waveform + play button.
+- **Parity:** Closes "Voice notes" gap.
 
 ---
 
-## 5. Deferred bigger blocks
+## 6. Deferred bigger blocks
 
-### 5.1 · SIP / Asterisk WebRTC calling (XL) — 🕒
+### 6.1 · SIP / Asterisk WebRTC calling (XL) — 🕒
 
 - **Original phase 5** of the roadmap. The [`dart-pbx`](../../dart-pbx) and [`dart-ari`](../../dart-ari) projects are ready to plug into.
-- **Deferred** by user request until higher-ROI XMPP work landed. Reopen when a specific call-flow requirement drives it.
+- Delivers 1:1 audio + video calls with JSSIP-shape signalling. **Not** group meetings — those are § 6.5.
+- **Parity delta:** closes "Voice calls" and "Video calls" gaps (2 of 3 Teams/WA table rows).
 
-### 5.2 · Server-to-server federation (XL) — 🕒
+### 6.2 · Server-to-server federation (XL) — 🕒
 
-- XEP-0220 dialback across two rainbow-stub instances. Only worth doing if a multi-tenant / multi-server demo is on the horizon.
+- XEP-0220 dialback across two rainbow-stub instances.
+- Only worth doing if a multi-tenant / multi-server demo is on the horizon.
+- **Parity delta:** matches Teams external federation surface (not WhatsApp — WA is walled).
 
-### 5.3 · Push notifications (L) — 🕒
+### 6.3 · Push notifications (L) — 🕒
 
 - Offline delivery via FCM/APNs, proxied by the stub. Requires per-device token registration + native SDK integration on Flutter.
+- **This is the single biggest UX gap** — without it, the app can't wake up on a new message when backgrounded.
+- **Parity delta:** the "backgrounded chat wakes user up" experience that both WhatsApp and Teams take for granted.
+
+### 6.4 · End-to-end encryption (XL) — ⬜
+
+- **What:** Signal-protocol double ratchet + X3DH prekey server + safety-number verification.
+- Requires substantial changes: the messages table stores ciphertext only, key material lives on the client, and the server can never MAM-index bodies. MAM becomes envelope-only.
+- **Where:** New `lib/src/e2e/` module server-side; new `lib/rainbow/e2e/` client-side; changes to `MessageRepository`, `_handleMessage`.
+- **Parity delta:** matches WhatsApp's headline promise; matches Teams' Teams-Premium E2E track.
+- **Not compatible with:** server-side full-text search, retention scanning, DLP. Would need to be an opt-in feature.
+
+### 6.5 · Meetings + recording + transcription (XL) — 🕒
+
+- **What:** Group audio/video calls (up to N attendees) via an SFU (mediasoup, Janus, LiveKit). Recording via an egress bot. Live captions + post-call transcript via a locally-hosted Whisper / cloud STT.
+- **Depends on:** § 6.1 as a prerequisite for 1:1 media stack.
+- **Where:** Probably a sidecar service, not the shelf process. Signalling stays in XMPP (Jingle-over-XMPP is the natural fit).
+- **Parity delta:** the biggest single Teams differentiator vs. WhatsApp.
+
+### 6.6 · Admin console + SSO + retention + audit (XL) — ⬜
+
+- **What:**
+  - Admin web console (Flutter web) for user provisioning, bubble/room admin, presence override, message retention policies, and export.
+  - SSO via OIDC + MFA (Azure AD / Okta / Auth0-friendly). Guest user flow.
+  - Retention policies (per-tenant N days), legal hold, DLP scanning hooks.
+  - Tamper-evident audit log (append-only, per-event signed).
+- **Parity delta:** everything the "Enterprise" column in the feature grid needs.
+- **Not code-only:** SOC 2 / HIPAA / GDPR require formal controls + external audit.
+
+### 6.7 · Horizontal scale — Postgres + Redis + shelf workers (L–XL) — ⬜
+
+- **What:**
+  - Move SQLite → Postgres (drift's Postgres backend or `postgres` package).
+  - Move `StanzaRouter` and `SmRegistry` into a Redis-backed pub/sub so multiple shelf workers behind a load-balancer can share sessions.
+  - Sharding key: `userId` → worker.
+- **Ceiling today:** single node, maybe ~2–5k concurrent XMPP sessions on decent hardware. Post-migration: horizontal.
+- **Parity delta:** any consumer product needs this before onboarding a real user base.
+
+### 6.8 · Global media CDN (L) — ⬜
+
+- **What:** Instead of `data/files/` on local disk, upload user files to an object store (S3/R2/B2/Azure Blob), issue signed URLs, front with a CDN.
+- **Parity delta:** matches WhatsApp/Teams media delivery speed globally.
+
+### 6.9 · Compliance certifications (XL, not just code) — ⬜
+
+- **What:** SOC 2 Type II, HIPAA BAA-ready, GDPR DPA templates, ISO 27001 alignment.
+- Not something to schedule as a dev task; it's a company-level programme with policies, controls, external auditors, ~6–12 months + $$$.
+- **Depends on:** § 6.6 for the technical controls.
 
 ---
 
-## 6. What's already done — quick history
+## 7. What's already done — quick history
 
 For context, the biggest chunks already shipped:
 
@@ -168,10 +370,23 @@ Total: **~41 stub tests + 6 consumer tests, 0 errors on UAT, 2 git repos on `mai
 
 ---
 
-## 7. My picks if you only do one thing next
+## 8. My picks if you only do one thing next
 
 - **Fastest visible win:** [§ 1.1 chat E2E test](#11--11-and-group-chat-end-to-end-test-s--) (S)
 - **Most impressive stack exercise:** [§ 1.2 file upload UI](#12--file-uploaddownload-ui-m--) (M)
 - **Biggest strategic milestone:** [§ 2.1 RN sample end-to-end](#21--react-native-rainbow-sample-end-to-end-ml--) (M–L)
+- **Biggest single UX gap for a real user:** [§ 6.3 push notifications](#63--push-notifications-l--) (L)
+- **Biggest strategic "we're serious about chat" signal:** [§ 6.4 E2E encryption](#64--end-to-end-encryption-xl--) (XL)
+
+If in doubt, do § 1.1 — it costs almost nothing and moves "chat works" from anecdote to CI-enforced.
+
+### Suggested closing-the-gap sequences
+
+Depending on what target from § 4.2 you're aiming for, work these paths:
+
+- **"Full-featured chat" target** — § 1.2 → § 1.3 → § 5.6 → § 5.7 → § 5.5 → § 5.1 → § 5.11 → § 6.3 → § 5.9 → § 5.10 → § 6.4
+- **"Small-team collaboration" target** — the above + § 5.8 → § 6.6 (admin subset: SSO, retention)
+- **"WhatsApp-tier"** — above through § 6.4 + § 5.12 (voice notes) + § 6.1 (calls) + § 5.4 (Android) + iOS work
+- **"Teams-tier"** — everything, and prepare to hire
 
 If in doubt, do § 1.1 — it costs almost nothing and moves "chat works" from anecdote to CI-enforced.
