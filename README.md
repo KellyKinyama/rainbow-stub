@@ -48,9 +48,19 @@ Then point the RN sample at it — edit `android/app/src/main/assets/rainbow-con
 
 ## Roadmap
 
+Full grouped-by-ROI roadmap with estimates and acceptance criteria:
+**[ROADMAP.md](ROADMAP.md)**.
+
+Snapshot of the phase timeline:
+
 - [x] Phase 0 — scaffold, TLS, `/health`
 - [x] Phase 1 — auth REST (login/logout/renew, self-register, reset-password), users REST
-- [ ] Phase 2 — roster + avatars
-- [ ] Phase 3 — XMPP-over-WS via `xmppx_server`
-- [ ] Phase 4 — bubbles, invitations, files, call-log
-- [ ] Phase 5 — Asterisk ARI bridge for P2P + ConfBridge
+- [x] Phase 2 — roster, avatars, presence
+- [x] Phase 3 — XMPP-over-WS (SASL, binding, 1:1 chat, MAM, chat states)
+- [x] Phase 4 — bubbles, files, call-log, XMPP push events
+- [x] Phase 5-XMPP hardening — ping, disco, roster IQ, presence probe, MUC light, receipts
+- [x] Batch — XEP-0198 SM (enable/ack/resume), XEP-0280 carbons, bubble MAM, XEP-0313 RSM
+- [x] Hardening — stanza size, queue caps, session caps, keepalive, MAM auth, SASL cap
+- [x] Observability — TLS auto-gen + HSTS, JSON logs, Prometheus `/metrics`, XXE guard
+- [x] Flutter consumer (`c:\www\flutter\rainbow_stub_consumer`) + UAT record
+- [ ] Phase 5-SIP — Asterisk ARI bridge for P2P + ConfBridge *(deferred)*
