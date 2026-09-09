@@ -280,6 +280,9 @@ reachable at `https://localhost:8443/health`.
 
 ## 5. Test-drive walkthrough (5 minutes end-to-end)
 
+> An acceptance run of this walkthrough was recorded on 2026-09-09 —
+> see [UAT.md](UAT.md) for the log-backed evidence.
+
 Terminal A — start the stub:
 
 ```powershell
