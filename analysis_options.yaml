@@ -1,0 +1,12 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - .dart_tool/**
+
+linter:
+  rules:
+    prefer_final_locals: true
+    prefer_single_quotes: true
+    unawaited_futures: true

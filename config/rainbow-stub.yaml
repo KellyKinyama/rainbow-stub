@@ -1,0 +1,41 @@
+# Local development config for rainbow-stub.
+# Override any key via env var RAINBOW_STUB_<UPPER_KEY> (nested with __).
+
+host: 0.0.0.0
+port: 8443
+publicHost: localhost          # used in XMPP JIDs and URLs handed to clients
+tlsCertPath: ./certs/rainbow-stub.crt
+tlsKeyPath: ./certs/rainbow-stub.key
+
+dbPath: ./data/rainbow.db
+fileStorePath: ./data/files
+avatarStorePath: ./data/avatars
+
+auth:
+  # Must match android/app/src/main/assets/rainbow-config.json
+  # and ios/rainbow-config.json in the RN sample.
+  appId: 65c681c01c8f11e9add8932b358ef81d
+  appSecret: UYdu3wCXTdfyjImhURnIkZ0tac5J9XSLszIKBRUUWVB35b6nT3fWV2BhAGhojdBQ
+  tokenTtlSeconds: 86400        # 24h — matches Rainbow default
+  renewTtlSeconds: 172800       # 48h
+
+asterisk:
+  # Reuses c:\www\dart\dart-pbx docker-compose service.
+  ariUrl: http://asterisk:8088/asterisk/ari
+  ariUser: asterisk
+  ariPassword: asterisk
+  wsSipUrl: wss://localhost:8089/asterisk/ws
+  sipDomain: rainbow-stub
+
+tls:
+  enabled: true
+  autoGenerate: true             # openssl-generate self-signed on first boot if missing
+  hstsMaxAge: 15552000           # 180 days
+  hstsIncludeSubdomains: true
+
+logs:
+  format: json                   # 'json' → NDJSON | 'text' → human-friendly
+
+metrics:
+  enabled: true
+  path: /metrics                 # Prometheus text-format exposition

@@ -1,0 +1,31 @@
+# Runs rainbow-stub alongside the existing PBX in c:\www\dart\dart-pbx.
+# Boot order:
+#   1. `docker compose -f ../dart-pbx/docker-compose.yml up -d`
+#   2. `docker compose -f docker/docker-compose.yml up rainbow-stub`
+# so that the `asterisk4` container is already on the shared network.
+#
+# Both stacks join the external network `rainbow-net`. Create it once:
+#   docker network create rainbow-net
+name: rainbow-stub
+services:
+  rainbow-stub:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: rainbow-stub
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    volumes:
+      - ../data:/app/data
+      - ../certs:/app/certs
+      - ../config:/app/config
+    environment:
+      - RAINBOW_STUB_ASTERISK__ARIURL=http://asterisk4:8088/asterisk/ari
+    networks:
+      - rainbow-net
+    depends_on: []
+
+networks:
+  rainbow-net:
+    external: true

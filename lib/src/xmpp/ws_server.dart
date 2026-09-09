@@ -1,0 +1,43 @@
+import 'package:logging/logging.dart';
+import 'package:shelf/shelf.dart';
+import 'package:shelf_web_socket/shelf_web_socket.dart';
+
+import '../auth/auth_service.dart';
+import '../bubbles/bubble_repository.dart';
+import '../messages/message_repository.dart';
+import '../users/presence_repository.dart';
+import '../users/roster_repository.dart';
+import '../users/user_repository.dart';
+import 'router.dart';
+import 'session.dart';
+
+final _log = Logger('xmpp.ws');
+
+Handler xmppWebSocketHandler({
+  required String domain,
+  required AuthService auth,
+  required UserRepository users,
+  required PresenceRepository presence,
+  required MessageRepository messages,
+  required BubbleRepository bubbles,
+  required RosterRepository roster,
+  required StanzaRouter router,
+  required SmRegistry smRegistry,
+}) {
+  return webSocketHandler((channel, protocol) async {
+    _log.info('ws open protocol=$protocol');
+    final session = XmppWsSession(
+      channel: channel,
+      domain: domain,
+      auth: auth,
+      users: users,
+      presence: presence,
+      messages: messages,
+      bubbles: bubbles,
+      roster: roster,
+      router: router,
+      smRegistry: smRegistry,
+    );
+    await session.run();
+  }, protocols: const ['xmpp']);
+}
