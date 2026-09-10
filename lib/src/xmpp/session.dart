@@ -696,7 +696,14 @@ class XmppWsSession implements XmppSession {
       for (final m in slice.page) {
         send(_wrapBubbleForMam(queryId, m));
       }
-      send(_mamFin(queryId, slice.page, total: slice.total));
+      send(
+        _mamFin(
+          queryId,
+          slice.page,
+          total: slice.total,
+          complete: slice.page.length < max,
+        ),
+      );
       _replayReactionsForBubble(peer, slice.page);
       return;
     }
@@ -714,7 +721,14 @@ class XmppWsSession implements XmppSession {
     for (final m in slice.page) {
       send(_wrapForMam(queryId, m));
     }
-    send(_mamFin(queryId, slice.page, total: slice.total));
+    send(
+      _mamFin(
+        queryId,
+        slice.page,
+        total: slice.total,
+        complete: slice.page.length < max,
+      ),
+    );
     _replayReactionsFor1To1(slice.page);
   }
 
