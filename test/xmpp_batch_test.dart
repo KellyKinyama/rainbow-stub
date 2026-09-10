@@ -419,56 +419,63 @@ void main() {
 
   // -------- XEP-0166 Jingle signaling passthrough -------------------------
 
-  test('session-initiate is routed to the callee and acked to the caller',
-      () async {
-    final alice = await connect(
-      email: 'alice@rainbow-stub.local',
-      token: aliceToken,
-      resource: 'phone',
-    );
-    final bob = await connect(
-      email: 'bob@rainbow-stub.local',
-      token: bobToken,
-      resource: 'phone',
-    );
+  test(
+    'session-initiate is routed to the callee and acked to the caller',
+    () async {
+      final alice = await connect(
+        email: 'alice@rainbow-stub.local',
+        token: aliceToken,
+        resource: 'phone',
+      );
+      final bob = await connect(
+        email: 'bob@rainbow-stub.local',
+        token: bobToken,
+        resource: 'phone',
+      );
 
-    final ackReady = alice.stream.firstWhere(
-      (e) => e.localName == 'iq' && e.getAttribute('id') == 'j-init',
-    );
-    final delivered = Completer<XmlElement>();
-    late StreamSubscription sub;
-    sub = bob.stream.listen((e) {
-      if (e.localName == 'iq' &&
-          e.getElement('jingle', namespace: 'urn:xmpp:jingle:1') != null &&
-          !delivered.isCompleted) {
-        delivered.complete(e);
-      }
-    });
+      final ackReady = alice.stream.firstWhere(
+        (e) => e.localName == 'iq' && e.getAttribute('id') == 'j-init',
+      );
+      final delivered = Completer<XmlElement>();
+      late StreamSubscription sub;
+      sub = bob.stream.listen((e) {
+        if (e.localName == 'iq' &&
+            e.getElement('jingle', namespace: 'urn:xmpp:jingle:1') != null &&
+            !delivered.isCompleted) {
+          delivered.complete(e);
+        }
+      });
 
-    alice.send(
-      '<iq type="set" id="j-init" to="$bobId@$_domain/phone">'
-      '<jingle xmlns="urn:xmpp:jingle:1" action="session-initiate" '
-      'sid="sid-1" initiator="$aliceId@$_domain/phone">'
-      '<content name="audio" creator="initiator">'
-      '<description xmlns="urn:xmpp:jingle:apps:rtp:1" media="audio"/>'
-      '<transport xmlns="urn:xmpp:jingle:transports:ice-udp:1"/>'
-      '</content>'
-      '</jingle></iq>',
-    );
+      alice.send(
+        '<iq type="set" id="j-init" to="$bobId@$_domain/phone">'
+        '<jingle xmlns="urn:xmpp:jingle:1" action="session-initiate" '
+        'sid="sid-1" initiator="$aliceId@$_domain/phone">'
+        '<content name="audio" creator="initiator">'
+        '<description xmlns="urn:xmpp:jingle:apps:rtp:1" media="audio"/>'
+        '<transport xmlns="urn:xmpp:jingle:transports:ice-udp:1"/>'
+        '</content>'
+        '</jingle></iq>',
+      );
 
-    final ack = await ackReady.timeout(const Duration(seconds: 3));
-    expect(ack.getAttribute('type'), 'result');
+      final ack = await ackReady.timeout(const Duration(seconds: 3));
+      expect(ack.getAttribute('type'), 'result');
 
-    final incoming = await delivered.future.timeout(const Duration(seconds: 3));
-    final jingle = incoming.getElement('jingle', namespace: 'urn:xmpp:jingle:1');
-    expect(jingle?.getAttribute('action'), 'session-initiate');
-    expect(jingle?.getAttribute('sid'), 'sid-1');
-    expect(incoming.getAttribute('from'), startsWith('$aliceId@$_domain'));
+      final incoming = await delivered.future.timeout(
+        const Duration(seconds: 3),
+      );
+      final jingle = incoming.getElement(
+        'jingle',
+        namespace: 'urn:xmpp:jingle:1',
+      );
+      expect(jingle?.getAttribute('action'), 'session-initiate');
+      expect(jingle?.getAttribute('sid'), 'sid-1');
+      expect(incoming.getAttribute('from'), startsWith('$aliceId@$_domain'));
 
-    await sub.cancel();
-    await alice.close();
-    await bob.close();
-  });
+      await sub.cancel();
+      await alice.close();
+      await bob.close();
+    },
+  );
 
   test('unknown Jingle action returns feature-not-implemented', () async {
     final alice = await connect(
@@ -499,6 +506,78 @@ void main() {
       isNotNull,
     );
     await alice.close();
+  });
+
+  test(
+      'M-3 Jingle call round-trip: session-initiate + accept + terminate '
+      'flow through the router in sequence',
+      () async {
+    final alice = await connect(
+      email: 'alice@rainbow-stub.local',
+      token: aliceToken,
+      resource: 'phone',
+    );
+    final bob = await connect(
+      email: 'bob@rainbow-stub.local',
+      token: bobToken,
+      resource: 'phone',
+    );
+
+    final bobActions = <String>[];
+    final aliceActions = <String>[];
+    late StreamSubscription bobSub;
+    late StreamSubscription aliceSub;
+    bobSub = bob.stream.listen((e) {
+      if (e.localName != 'iq') return;
+      final j = e.getElement('jingle', namespace: 'urn:xmpp:jingle:1');
+      if (j != null) bobActions.add(j.getAttribute('action') ?? '');
+    });
+    aliceSub = alice.stream.listen((e) {
+      if (e.localName != 'iq') return;
+      final j = e.getElement('jingle', namespace: 'urn:xmpp:jingle:1');
+      if (j != null) aliceActions.add(j.getAttribute('action') ?? '');
+    });
+
+    // 1. Alice → session-initiate → Bob.
+    alice.send(
+      '<iq type="set" id="j1" to="$bobId@$_domain/phone">'
+      '<jingle xmlns="urn:xmpp:jingle:1" action="session-initiate" '
+      'sid="rt-1" initiator="$aliceId@$_domain/phone">'
+      '<content name="rtp" creator="initiator">'
+      '<rainbow-sdp xmlns="urn:rainbow:jingle:sdp:1">'
+      '<![CDATA[v=0]]>'
+      '</rainbow-sdp>'
+      '</content></jingle></iq>',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // 2. Bob → session-accept → Alice.
+    bob.send(
+      '<iq type="set" id="j2" to="$aliceId@$_domain/phone">'
+      '<jingle xmlns="urn:xmpp:jingle:1" action="session-accept" '
+      'sid="rt-1" responder="$bobId@$_domain/phone">'
+      '<content name="rtp" creator="initiator">'
+      '<rainbow-sdp xmlns="urn:rainbow:jingle:sdp:1">'
+      '<![CDATA[v=0-answer]]>'
+      '</rainbow-sdp>'
+      '</content></jingle></iq>',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // 3. Alice hangs up → Bob sees session-terminate.
+    alice.send(
+      '<iq type="set" id="j3" to="$bobId@$_domain/phone">'
+      '<jingle xmlns="urn:xmpp:jingle:1" action="session-terminate" '
+      'sid="rt-1"><reason><success/></reason></jingle></iq>',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    await bobSub.cancel();
+    await aliceSub.cancel();
+    expect(bobActions, ['session-initiate', 'session-terminate']);
+    expect(aliceActions, ['session-accept']);
+    await alice.close();
+    await bob.close();
   });
 }
 
