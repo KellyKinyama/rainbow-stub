@@ -37,7 +37,6 @@ class Ns {
   static const chatMarkers = 'urn:xmpp:chat-markers:0';
   static const reactions = 'urn:xmpp:reactions:0';
   static const messageRetract = 'urn:xmpp:message-retract:1';
-  static const sentAck = 'urn:xmpp:sent-ack:1';
   static const muc = 'http://jabber.org/protocol/muc';
   static const mucUser = 'http://jabber.org/protocol/muc#user';
   static const sm3 = 'urn:xmpp:sm:3';
@@ -900,7 +899,8 @@ class XmppWsSession implements XmppSession {
       (e) => e.name.namespaceUri == Ns.reactions,
     );
     final retractEl = el.children.whereType<XmlElement>().firstWhere(
-      (e) => e.name.namespaceUri == Ns.messageRetract && e.localName == 'retract',
+      (e) =>
+          e.name.namespaceUri == Ns.messageRetract && e.localName == 'retract',
       orElse: () => XmlElement(XmlName('none')),
     );
     final hasRetract = retractEl.name.local != 'none';
@@ -942,13 +942,9 @@ class XmppWsSession implements XmppSession {
       stanzaId: stanzaId,
       body: body,
     );
-    // Synthetic sent-ack back to me so the sender's UI can flip from
-    // MessageStatus.sending → sent once the archive is durable.
-    send(
-      '<message from="${_esc(domain)}" to="${_esc(_jid.toString())}">'
-      '<sent xmlns="${Ns.sentAck}" id="${_esc(saved.stanzaId)}"/>'
-      '</message>',
-    );
+    // Note: sender-side ack is now delivered via XEP-0198 stream
+    // management (`<a h="…"/>`) — the counter increments naturally
+    // when the outgoing echo/forward path pushes stanzas.
     final forwarded = _rewriteFrom(el, id: saved.stanzaId);
     router.fanOut(to.local, forwarded);
     // XEP-0280 sent-carbon to my other sessions that opted in.
@@ -1025,6 +1021,13 @@ class XmppWsSession implements XmppSession {
     if (bubble == null) return;
     final myMember = bubbles.memberOf(bubbleId, _userId);
     if (myMember == null || myMember.status != 'accepted') return;
+
+    // XEP-0444 reactions on a MUC message have no <body> — persist the
+    // snapshot so MAM replay for later-joining members surfaces them.
+    final hasReactions = el.children.whereType<XmlElement>().any(
+      (e) => e.name.namespaceUri == Ns.reactions,
+    );
+    if (hasReactions) _persistReactions(el);
 
     final stanzaId =
         el.getAttribute('id') ??
