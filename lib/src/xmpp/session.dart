@@ -8,6 +8,7 @@ import 'package:xml/xml.dart';
 import '../auth/auth_service.dart';
 import '../bubbles/bubble_repository.dart';
 import '../messages/message_repository.dart';
+import '../messages/reaction_repository.dart';
 import '../users/presence_repository.dart';
 import '../users/roster_repository.dart';
 import '../users/user_repository.dart';
@@ -131,6 +132,7 @@ class XmppWsSession implements XmppSession {
     required this.users,
     required this.presence,
     required this.messages,
+    required this.reactions,
     required this.bubbles,
     required this.roster,
     required this.router,
@@ -144,6 +146,7 @@ class XmppWsSession implements XmppSession {
   final UserRepository users;
   final PresenceRepository presence;
   final MessageRepository messages;
+  final ReactionRepository reactions;
   final BubbleRepository bubbles;
   final RosterRepository roster;
   final StanzaRouter router;
@@ -693,6 +696,7 @@ class XmppWsSession implements XmppSession {
         send(_wrapBubbleForMam(queryId, m));
       }
       send(_mamFin(queryId, slice.page, total: slice.total));
+      _replayReactionsForBubble(peer, slice.page);
       return;
     }
 
@@ -710,6 +714,7 @@ class XmppWsSession implements XmppSession {
       send(_wrapForMam(queryId, m));
     }
     send(_mamFin(queryId, slice.page, total: slice.total));
+    _replayReactionsFor1To1(slice.page);
   }
 
   String _mamFin(
@@ -791,6 +796,86 @@ class XmppWsSession implements XmppSession {
         '</message>';
   }
 
+  /// Persists the reaction snapshot from a `<message><reactions>…` stanza.
+  /// Called BEFORE forwarding so the archive is authoritative even if the
+  /// recipient is offline.
+  void _persistReactions(XmlElement message) {
+    final reactionsEl = message.getElement('reactions');
+    if (reactionsEl == null) return;
+    final targetId = reactionsEl.getAttribute('id');
+    if (targetId == null || targetId.isEmpty) return;
+    final emojis = reactionsEl.children
+        .whereType<XmlElement>()
+        .where((c) => c.localName == 'reaction')
+        .map((c) => c.innerText)
+        .where((s) => s.isNotEmpty)
+        .toList();
+    reactions.upsert(
+      targetStanzaId: targetId,
+      fromUserId: _userId,
+      emojis: emojis,
+    );
+  }
+
+  /// After 1:1 MAM history is delivered, replay every persisted reaction
+  /// on those messages as a live `<message><reactions>` stanza so the
+  /// client's normal reactions listener updates the corresponding bubble.
+  void _replayReactionsFor1To1(List<ChatMessage> page) {
+    for (final m in page) {
+      final byUser = reactions.findForMessage(m.stanzaId);
+      for (final entry in byUser.entries) {
+        final fromJid = '${entry.key}@$domain';
+        send(
+          _buildReactionsStanza(
+            fromJid: fromJid,
+            targetStanzaId: m.stanzaId,
+            emojis: entry.value,
+            type: 'chat',
+          ),
+        );
+      }
+    }
+  }
+
+  void _replayReactionsForBubble(Jid room, List<BubbleMessage> page) {
+    final roomJid = room.toString();
+    for (final m in page) {
+      final byUser = reactions.findForMessage(m.stanzaId);
+      for (final entry in byUser.entries) {
+        // MUC nicks are just the user's local part in this stub.
+        send(
+          _buildReactionsStanza(
+            fromJid: '$roomJid/${entry.key}',
+            targetStanzaId: m.stanzaId,
+            emojis: entry.value,
+            type: 'groupchat',
+          ),
+        );
+      }
+    }
+  }
+
+  String _buildReactionsStanza({
+    required String fromJid,
+    required String targetStanzaId,
+    required List<String> emojis,
+    required String type,
+  }) {
+    final buf = StringBuffer()
+      ..write(
+        '<message xmlns="${Ns.client}" from="${_esc(fromJid)}" '
+        'to="${_esc(_jid.toString())}" type="$type">',
+      )
+      ..write(
+        '<reactions xmlns="${Ns.reactions}" id="${_esc(targetStanzaId)}">',
+      );
+    for (final e in emojis) {
+      buf.write('<reaction>${_esc(e)}</reaction>');
+    }
+    buf.write('</reactions></message>');
+    return buf.toString();
+  }
+
   void _handleMessage(XmlElement el) {
     if (_state != _State.bound) return;
     final toAttr = el.getAttribute('to');
@@ -820,9 +905,11 @@ class XmppWsSession implements XmppSession {
     }
 
     // Chat-state / receipt / marker / reactions only — forward without
-    // persisting.
+    // persisting the surrounding message. For reactions we DO persist an
+    // out-of-band snapshot so MAM can replay them to offline recipients.
     if (body == null &&
         (chatState != null || hasReceipt || hasMarker || hasReactions)) {
+      if (hasReactions) _persistReactions(el);
       final forwarded = _rewriteFrom(el);
       router.fanOut(to.local, forwarded);
       return;

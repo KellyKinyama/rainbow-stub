@@ -128,6 +128,18 @@ CREATE TABLE IF NOT EXISTS bubble_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_bmsg_room ON bubble_messages(bubble_id, sent_at);
 
+-- XEP-0444 reactions on messages (both 1:1 and MUC). One row per
+-- (target message stanza id, reactor user id) — emojis is the full JSON
+-- array snapshot, matching the XEP's "current-full-set" semantics.
+CREATE TABLE IF NOT EXISTS reactions (
+  target_stanza_id TEXT NOT NULL,
+  from_user_id     TEXT NOT NULL,
+  emojis_json      TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  PRIMARY KEY (target_stanza_id, from_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_reactions_target ON reactions(target_stanza_id);
+
 -- Phase 4: shared file descriptors. Blob lives at fileStorePath/<id>.
 CREATE TABLE IF NOT EXISTS file_descriptors (
   id            TEXT PRIMARY KEY,

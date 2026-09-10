@@ -5,6 +5,7 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import '../auth/auth_service.dart';
 import '../bubbles/bubble_repository.dart';
 import '../messages/message_repository.dart';
+import '../messages/reaction_repository.dart';
 import '../users/presence_repository.dart';
 import '../users/roster_repository.dart';
 import '../users/user_repository.dart';
@@ -19,6 +20,7 @@ Handler xmppWebSocketHandler({
   required UserRepository users,
   required PresenceRepository presence,
   required MessageRepository messages,
+  required ReactionRepository reactions,
   required BubbleRepository bubbles,
   required RosterRepository roster,
   required StanzaRouter router,
@@ -33,6 +35,7 @@ Handler xmppWebSocketHandler({
       users: users,
       presence: presence,
       messages: messages,
+      reactions: reactions,
       bubbles: bubbles,
       roster: roster,
       router: router,

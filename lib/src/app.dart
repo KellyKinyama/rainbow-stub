@@ -17,6 +17,7 @@ import 'events/event_pusher.dart';
 import 'files/file_store.dart';
 import 'files/routes.dart' as file_routes;
 import 'messages/message_repository.dart';
+import 'messages/reaction_repository.dart';
 import 'metrics/metrics.dart';
 import 'users/avatar_store.dart';
 import 'users/presence_repository.dart';
@@ -38,6 +39,7 @@ class RainbowStubApp {
     required this.presence,
     required this.avatars,
     required this.messages,
+    required this.reactions,
     required this.bubbles,
     required this.files,
     required this.callLog,
@@ -56,6 +58,7 @@ class RainbowStubApp {
   final PresenceRepository presence;
   final AvatarStore avatars;
   final MessageRepository messages;
+  final ReactionRepository reactions;
   final BubbleRepository bubbles;
   final FileStore files;
   final CallLogRepository callLog;
@@ -77,6 +80,7 @@ class RainbowStubApp {
     final presence = PresenceRepository(db);
     final avatars = AvatarStore(rootDir: config.avatarStorePath, db: db);
     final messages = MessageRepository(db, ids);
+    final reactions = ReactionRepository(db);
     final bubbles = BubbleRepository(db, ids);
     final files = FileStore(rootDir: config.fileStorePath, db: db, ids: ids);
     final callLog = CallLogRepository(db, ids);
@@ -102,6 +106,7 @@ class RainbowStubApp {
       presence: presence,
       avatars: avatars,
       messages: messages,
+      reactions: reactions,
       bubbles: bubbles,
       files: files,
       callLog: callLog,
@@ -121,6 +126,7 @@ class RainbowStubApp {
       users: users,
       presence: presence,
       messages: messages,
+      reactions: reactions,
       bubbles: bubbles,
       roster: roster,
       router: xmppRouter,
