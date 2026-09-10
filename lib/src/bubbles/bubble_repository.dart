@@ -198,6 +198,16 @@ class BubbleRepository {
         .toList();
   }
 
+  /// Convenience: accepted member ids only. Used to fan out server-
+  /// synthesized MUC stanzas (e.g. XEP-0424 retract).
+  List<String> memberIdsOf(String bubbleId) {
+    final rs = _db.db.select(
+      "SELECT user_id FROM bubble_members WHERE bubble_id = ? AND status = 'accepted'",
+      [bubbleId],
+    );
+    return rs.map((r) => r['user_id'] as String).toList();
+  }
+
   BubbleMember? memberOf(String bubbleId, String userId) {
     final rs = _db.db.select(
       'SELECT * FROM bubble_members WHERE bubble_id = ? AND user_id = ?',
@@ -291,6 +301,26 @@ class BubbleRepository {
       [bubbleId, limit],
     );
     return rs.map(_rowToBubbleMessage).toList();
+  }
+
+  /// Returns the row matching [stanzaId] in [bubbleId], or null if none.
+  BubbleMessage? findMessageByStanzaId(String bubbleId, String stanzaId) {
+    final rs = _db.db.select(
+      'SELECT * FROM bubble_messages WHERE bubble_id = ? AND stanza_id = ? '
+      'LIMIT 1',
+      [bubbleId, stanzaId],
+    );
+    if (rs.isEmpty) return null;
+    return _rowToBubbleMessage(rs.first);
+  }
+
+  /// Deletes a bubble message by its stanza id. Used by XEP-0424 retract.
+  bool deleteMessageByStanzaId(String bubbleId, String stanzaId) {
+    _db.db.execute(
+      'DELETE FROM bubble_messages WHERE bubble_id = ? AND stanza_id = ?',
+      [bubbleId, stanzaId],
+    );
+    return _db.db.updatedRows > 0;
   }
 
   /// XEP-0313 + RSM-aware slice for bubble history.

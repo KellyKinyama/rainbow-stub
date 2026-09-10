@@ -36,6 +36,8 @@ class Ns {
   static const receipts = 'urn:xmpp:receipts';
   static const chatMarkers = 'urn:xmpp:chat-markers:0';
   static const reactions = 'urn:xmpp:reactions:0';
+  static const messageRetract = 'urn:xmpp:message-retract:1';
+  static const sentAck = 'urn:xmpp:sent-ack:1';
   static const muc = 'http://jabber.org/protocol/muc';
   static const mucUser = 'http://jabber.org/protocol/muc#user';
   static const sm3 = 'urn:xmpp:sm:3';
@@ -897,10 +899,25 @@ class XmppWsSession implements XmppSession {
     final hasReactions = el.children.whereType<XmlElement>().any(
       (e) => e.name.namespaceUri == Ns.reactions,
     );
+    final retractEl = el.children.whereType<XmlElement>().firstWhere(
+      (e) => e.name.namespaceUri == Ns.messageRetract && e.localName == 'retract',
+      orElse: () => XmlElement(XmlName('none')),
+    );
+    final hasRetract = retractEl.name.local != 'none';
 
     // Group chat (bubble). `to` is <bubbleId>@muc.<domain>.
     if (type == 'groupchat' || to.domain.startsWith(Ns.mucPrefix)) {
+      if (hasRetract) {
+        _handleGroupRetract(to, retractEl);
+        return;
+      }
       _handleGroupChat(el, to, body);
+      return;
+    }
+
+    // XEP-0424 retract on a 1:1 message.
+    if (hasRetract && body == null) {
+      _handle1To1Retract(to, retractEl);
       return;
     }
 
@@ -925,6 +942,13 @@ class XmppWsSession implements XmppSession {
       stanzaId: stanzaId,
       body: body,
     );
+    // Synthetic sent-ack back to me so the sender's UI can flip from
+    // MessageStatus.sending → sent once the archive is durable.
+    send(
+      '<message from="${_esc(domain)}" to="${_esc(_jid.toString())}">'
+      '<sent xmlns="${Ns.sentAck}" id="${_esc(saved.stanzaId)}"/>'
+      '</message>',
+    );
     final forwarded = _rewriteFrom(el, id: saved.stanzaId);
     router.fanOut(to.local, forwarded);
     // XEP-0280 sent-carbon to my other sessions that opted in.
@@ -933,6 +957,54 @@ class XmppWsSession implements XmppSession {
       if (s is XmppWsSession && s._carbonsEnabled) {
         s.send(_wrapSentCarbon(forwarded));
       }
+    }
+  }
+
+  /// XEP-0424 retract on a 1:1 conversation — deletes the archived row
+  /// and forwards a synthetic `<message><retract/></message>` to the
+  /// peer so both sides drop the message locally.
+  void _handle1To1Retract(Jid to, XmlElement retractEl) {
+    final targetId = retractEl.getAttribute('id');
+    if (targetId == null || targetId.isEmpty) return;
+    final existing = messages.findByStanzaId(_jid, to, targetId);
+    if (existing == null) return;
+    // Only the original sender can retract their own message.
+    if (existing.from.bare.toString() != _jid.bare.toString()) return;
+    messages.deleteByStanzaId(_jid, to, targetId);
+    final stanza =
+        '<message xmlns="${Ns.client}" from="${_esc(_jid.toString())}" '
+        'to="${_esc(to.toString())}" type="chat">'
+        '<retract xmlns="${Ns.messageRetract}" id="${_esc(targetId)}"/>'
+        '</message>';
+    router.fanOut(to.local, stanza);
+    // Also echo to my own other sessions.
+    for (final s in router.sessionsOf(_userId)) {
+      if (identical(s, this)) continue;
+      if (s is XmppWsSession) s.send(stanza);
+    }
+  }
+
+  void _handleGroupRetract(Jid room, XmlElement retractEl) {
+    final bubbleId = room.local;
+    final bubble = bubbles.findById(bubbleId);
+    if (bubble == null) return;
+    final myMember = bubbles.memberOf(bubbleId, _userId);
+    if (myMember == null || myMember.status != 'accepted') return;
+    final targetId = retractEl.getAttribute('id');
+    if (targetId == null || targetId.isEmpty) return;
+    final existing = bubbles.findMessageByStanzaId(bubbleId, targetId);
+    if (existing == null) return;
+    // Sender check: original from is `roomJid/nick` where nick is the
+    // user's local part in this stub.
+    if (existing.from.local != _userId) return;
+    bubbles.deleteMessageByStanzaId(bubbleId, targetId);
+    final stanza =
+        '<message xmlns="${Ns.client}" from="${_esc('${room.toString()}/$_userId')}" '
+        'to="${_esc(room.toString())}" type="groupchat">'
+        '<retract xmlns="${Ns.messageRetract}" id="${_esc(targetId)}"/>'
+        '</message>';
+    for (final memberId in bubbles.memberIdsOf(bubbleId)) {
+      router.fanOut(memberId, stanza);
     }
   }
 

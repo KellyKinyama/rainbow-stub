@@ -175,4 +175,27 @@ class MessageRepository {
         ? null
         : DateTime.parse(r['read_at'] as String),
   );
+
+  /// Returns the row matching [stanzaId] within the canonical conversation
+  /// for [a] and [b], or null if no such message exists.
+  ChatMessage? findByStanzaId(Jid a, Jid b, String stanzaId) {
+    final conv = canonicalConversation(a, b);
+    final rs = _db.db.select(
+      'SELECT * FROM messages WHERE conversation = ? AND stanza_id = ? LIMIT 1',
+      [conv, stanzaId],
+    );
+    if (rs.isEmpty) return null;
+    return _rowToChat(rs.first);
+  }
+
+  /// Deletes the row for [stanzaId] in the canonical conversation. Returns
+  /// true if a row was removed. Used to implement XEP-0424 retraction.
+  bool deleteByStanzaId(Jid a, Jid b, String stanzaId) {
+    final conv = canonicalConversation(a, b);
+    _db.db.execute(
+      'DELETE FROM messages WHERE conversation = ? AND stanza_id = ?',
+      [conv, stanzaId],
+    );
+    return _db.db.updatedRows > 0;
+  }
 }
