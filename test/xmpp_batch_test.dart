@@ -508,10 +508,8 @@ void main() {
     await alice.close();
   });
 
-  test(
-      'M-3 Jingle call round-trip: session-initiate + accept + terminate '
-      'flow through the router in sequence',
-      () async {
+  test('M-3 Jingle call round-trip: session-initiate + accept + terminate '
+      'flow through the router in sequence', () async {
     final alice = await connect(
       email: 'alice@rainbow-stub.local',
       token: aliceToken,

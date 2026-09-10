@@ -30,6 +30,40 @@ Router callLogRouter({
     });
   });
 
+  // POST /users/<userId>/calllogs
+  //   body: { peerJid, peerDisplay?, direction, state, media?, durationMs? }
+  r.post('$base/<userId>/calllogs', (Request req, String userId) async {
+    final me = auth.authenticateBearer(req.headers['authorization']);
+    if (userId != me.id) throw RainbowError.forbidden();
+    final body = await readJsonBody(req);
+    final peerJid = (body['peerJid'] as String?)?.trim() ?? '';
+    if (peerJid.isEmpty) throw RainbowError.badRequest('peerJid is required');
+    const validDirections = {'outgoing', 'incoming'};
+    const validStates = {'answered', 'missed', 'declined', 'failed'};
+    final direction = (body['direction'] as String?) ?? 'outgoing';
+    final state = (body['state'] as String?) ?? 'answered';
+    if (!validDirections.contains(direction)) {
+      throw RainbowError.badRequest(
+        'direction must be one of ${validDirections.join(', ')}',
+      );
+    }
+    if (!validStates.contains(state)) {
+      throw RainbowError.badRequest(
+        'state must be one of ${validStates.join(', ')}',
+      );
+    }
+    final entry = log.insert(
+      ownerId: me.id,
+      peerJid: peerJid,
+      peerDisplay: body['peerDisplay'] as String?,
+      direction: direction,
+      state: state,
+      media: (body['media'] as String?) ?? 'audio',
+      durationMs: (body['durationMs'] as num?)?.toInt() ?? 0,
+    );
+    return jsonOk({'data': entry.toRainbowJson()}, status: 201);
+  });
+
   // DELETE /users/<userId>/calllogs/<id>
   r.delete('$base/<userId>/calllogs/<id>', (
     Request req,

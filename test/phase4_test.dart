@@ -316,6 +316,49 @@ void main() {
     );
     expect((jsonDecode(list2.body) as Map)['total'], 0);
   });
+
+  test('POST /calllogs creates an entry the client can later list',
+      () async {
+    final create = await req(
+      'POST',
+      '/api/rainbow/enduser/v1.0/users/$aliceId/calllogs',
+      headers: {...hdr(aliceToken), 'content-type': 'application/json'},
+      body: jsonEncode({
+        'peerJid': '$bobId@$_domain',
+        'peerDisplay': 'Bob',
+        'direction': 'outgoing',
+        'state': 'answered',
+        'media': 'video',
+        'durationMs': 42000,
+      }),
+    );
+    expect(create.statusCode, 201);
+    final data = (jsonDecode(create.body) as Map)['data'] as Map;
+    expect(data['peer'], '$bobId@$_domain');
+    expect(data['media'], 'video');
+    expect(data['duration'], 42000);
+
+    final list = await req(
+      'GET',
+      '/api/rainbow/enduser/v1.0/users/$aliceId/calllogs',
+      headers: hdr(aliceToken),
+    );
+    expect((jsonDecode(list.body) as Map)['total'], 1);
+  });
+
+  test('POST /calllogs rejects an invalid direction', () async {
+    final resp = await req(
+      'POST',
+      '/api/rainbow/enduser/v1.0/users/$aliceId/calllogs',
+      headers: {...hdr(aliceToken), 'content-type': 'application/json'},
+      body: jsonEncode({
+        'peerJid': '$bobId@$_domain',
+        'direction': 'sideways',
+        'state': 'answered',
+      }),
+    );
+    expect(resp.statusCode, 400);
+  });
 }
 
 class _Resp {
