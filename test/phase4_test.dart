@@ -317,8 +317,7 @@ void main() {
     expect((jsonDecode(list2.body) as Map)['total'], 0);
   });
 
-  test('POST /calllogs creates an entry the client can later list',
-      () async {
+  test('POST /calllogs creates an entry the client can later list', () async {
     final create = await req(
       'POST',
       '/api/rainbow/enduser/v1.0/users/$aliceId/calllogs',

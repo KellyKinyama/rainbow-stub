@@ -1,0 +1,39 @@
+# Smoke-test config for real-device / emulator runs.
+# Same as rainbow-stub.yaml but plaintext HTTP on :8080 so Android
+# clients don't have to trust a self-signed cert.
+
+host: 0.0.0.0
+port: 8080
+publicHost: localhost
+tlsCertPath: ./certs/rainbow-stub.crt
+tlsKeyPath: ./certs/rainbow-stub.key
+
+dbPath: ./data/rainbow.db
+fileStorePath: ./data/files
+avatarStorePath: ./data/avatars
+
+auth:
+  appId: 65c681c01c8f11e9add8932b358ef81d
+  appSecret: UYdu3wCXTdfyjImhURnIkZ0tac5J9XSLszIKBRUUWVB35b6nT3fWV2BhAGhojdBQ
+  tokenTtlSeconds: 86400
+  renewTtlSeconds: 172800
+
+asterisk:
+  ariUrl: http://asterisk:8088/asterisk/ari
+  ariUser: asterisk
+  ariPassword: asterisk
+  wsSipUrl: wss://localhost:8089/asterisk/ws
+  sipDomain: rainbow-stub
+
+tls:
+  enabled: false
+  autoGenerate: false
+  hstsMaxAge: 15552000
+  hstsIncludeSubdomains: true
+
+logs:
+  format: text
+
+metrics:
+  enabled: true
+  path: /metrics
