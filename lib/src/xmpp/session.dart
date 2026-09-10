@@ -34,6 +34,7 @@ class Ns {
   static const discoItems = 'http://jabber.org/protocol/disco#items';
   static const receipts = 'urn:xmpp:receipts';
   static const chatMarkers = 'urn:xmpp:chat-markers:0';
+  static const reactions = 'urn:xmpp:reactions:0';
   static const muc = 'http://jabber.org/protocol/muc';
   static const mucUser = 'http://jabber.org/protocol/muc#user';
   static const sm3 = 'urn:xmpp:sm:3';
@@ -808,6 +809,9 @@ class XmppWsSession implements XmppSession {
     final hasMarker = el.children.whereType<XmlElement>().any(
       (e) => e.name.namespaceUri == Ns.chatMarkers,
     );
+    final hasReactions = el.children.whereType<XmlElement>().any(
+      (e) => e.name.namespaceUri == Ns.reactions,
+    );
 
     // Group chat (bubble). `to` is <bubbleId>@muc.<domain>.
     if (type == 'groupchat' || to.domain.startsWith(Ns.mucPrefix)) {
@@ -815,8 +819,10 @@ class XmppWsSession implements XmppSession {
       return;
     }
 
-    // Chat-state / receipt / marker only — forward without persisting.
-    if (body == null && (chatState != null || hasReceipt || hasMarker)) {
+    // Chat-state / receipt / marker / reactions only — forward without
+    // persisting.
+    if (body == null &&
+        (chatState != null || hasReceipt || hasMarker || hasReactions)) {
       final forwarded = _rewriteFrom(el);
       router.fanOut(to.local, forwarded);
       return;
