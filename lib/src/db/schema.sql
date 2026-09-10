@@ -157,6 +157,19 @@ CREATE TABLE IF NOT EXISTS file_descriptors (
 CREATE INDEX IF NOT EXISTS idx_files_peer ON file_descriptors(peer_jid);
 CREATE INDEX IF NOT EXISTS idx_files_owner ON file_descriptors(owner_id);
 
+-- Phase 8: push notification device tokens. One row per (user, token).
+-- Used by the push dispatcher to log "would-push" events when the
+-- recipient has no active XMPP session.
+CREATE TABLE IF NOT EXISTS push_tokens (
+  user_id     TEXT NOT NULL,
+  token       TEXT NOT NULL,
+  platform    TEXT NOT NULL,             -- ios|android|web|debug
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, token),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id);
+
 -- Phase 4: call log (populated by ARI events in phase 5; REST-serve now).
 CREATE TABLE IF NOT EXISTS call_log (
   id            TEXT PRIMARY KEY,

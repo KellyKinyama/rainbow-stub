@@ -9,6 +9,7 @@ import '../auth/auth_service.dart';
 import '../bubbles/bubble_repository.dart';
 import '../messages/message_repository.dart';
 import '../messages/reaction_repository.dart';
+import '../push/push_token_repository.dart';
 import '../users/presence_repository.dart';
 import '../users/roster_repository.dart';
 import '../users/user_repository.dart';
@@ -138,6 +139,7 @@ class XmppWsSession implements XmppSession {
     required this.roster,
     required this.router,
     required this.smRegistry,
+    required this.pushTokens,
     this.limits = const XmppLimits(),
   }) : _channel = channel;
 
@@ -152,6 +154,7 @@ class XmppWsSession implements XmppSession {
   final RosterRepository roster;
   final StanzaRouter router;
   final SmRegistry smRegistry;
+  final PushTokenRepository pushTokens;
   final XmppLimits limits;
 
   _State _state = _State.streamOpened;
@@ -960,7 +963,20 @@ class XmppWsSession implements XmppSession {
     // management (`<a h="…"/>`) — the counter increments naturally
     // when the outgoing echo/forward path pushes stanzas.
     final forwarded = _rewriteFrom(el, id: saved.stanzaId);
-    router.fanOut(to.local, forwarded);
+    final delivered = router.fanOut(to.local, forwarded);
+    // If the recipient has NO active XMPP session, log every push
+    // token we'd notify. In production this is where FCM/APNs would
+    // be called; for the stub it's just an INFO line the test can
+    // scrape.
+    if (delivered == 0) {
+      final tokens = pushTokens.findForUser(to.local);
+      for (final t in tokens) {
+        _log.info(
+          'would-push user=${to.local} '
+          'platform=${t.platform} token=${t.token} from=$_userId',
+        );
+      }
+    }
     // XEP-0280 sent-carbon to my other sessions that opted in.
     for (final s in router.sessionsOf(_userId)) {
       if (identical(s, this)) continue;

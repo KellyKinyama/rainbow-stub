@@ -20,6 +20,8 @@ export 'src/files/file_store.dart';
 export 'src/files/routes.dart';
 export 'src/calllog/calllog_repository.dart';
 export 'src/calllog/routes.dart';
+export 'src/push/push_token_repository.dart';
+export 'src/push/routes.dart';
 export 'src/events/event_pusher.dart';
 export 'src/metrics/metrics.dart';
 export 'src/xmpp/jid.dart';

@@ -6,6 +6,7 @@ import '../auth/auth_service.dart';
 import '../bubbles/bubble_repository.dart';
 import '../messages/message_repository.dart';
 import '../messages/reaction_repository.dart';
+import '../push/push_token_repository.dart';
 import '../users/presence_repository.dart';
 import '../users/roster_repository.dart';
 import '../users/user_repository.dart';
@@ -25,6 +26,7 @@ Handler xmppWebSocketHandler({
   required RosterRepository roster,
   required StanzaRouter router,
   required SmRegistry smRegistry,
+  required PushTokenRepository pushTokens,
 }) {
   return webSocketHandler((channel, protocol) async {
     _log.info('ws open protocol=$protocol');
@@ -40,6 +42,7 @@ Handler xmppWebSocketHandler({
       roster: roster,
       router: router,
       smRegistry: smRegistry,
+      pushTokens: pushTokens,
     );
     await session.run();
   }, protocols: const ['xmpp']);

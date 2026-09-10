@@ -19,6 +19,8 @@ import 'files/routes.dart' as file_routes;
 import 'messages/message_repository.dart';
 import 'messages/reaction_repository.dart';
 import 'metrics/metrics.dart';
+import 'push/push_token_repository.dart';
+import 'push/routes.dart' as push_routes;
 import 'users/avatar_store.dart';
 import 'users/presence_repository.dart';
 import 'users/roster_repository.dart';
@@ -44,6 +46,7 @@ class RainbowStubApp {
     required this.files,
     required this.callLog,
     required this.tokens,
+    required this.pushTokens,
     required this.auth,
     required this.xmppRouter,
     required this.smRegistry,
@@ -63,6 +66,7 @@ class RainbowStubApp {
   final FileStore files;
   final CallLogRepository callLog;
   final TokenStore tokens;
+  final PushTokenRepository pushTokens;
   final AuthService auth;
   final StanzaRouter xmppRouter;
   final SmRegistry smRegistry;
@@ -85,6 +89,7 @@ class RainbowStubApp {
     final files = FileStore(rootDir: config.fileStorePath, db: db, ids: ids);
     final callLog = CallLogRepository(db, ids);
     final tokens = TokenStore(db);
+    final pushTokens = PushTokenRepository(db);
     final auth = AuthService(config: config, users: users, tokens: tokens);
     final xmppRouter = StanzaRouter();
     final smRegistry = SmRegistry();
@@ -111,6 +116,7 @@ class RainbowStubApp {
       files: files,
       callLog: callLog,
       tokens: tokens,
+      pushTokens: pushTokens,
       auth: auth,
       xmppRouter: xmppRouter,
       smRegistry: smRegistry,
@@ -131,6 +137,7 @@ class RainbowStubApp {
       roster: roster,
       router: xmppRouter,
       smRegistry: smRegistry,
+      pushTokens: pushTokens,
     );
     final router = Router()
       ..get(
@@ -177,7 +184,8 @@ class RainbowStubApp {
         '/',
         file_routes.fileRouter(auth: auth, files: files, events: events).call,
       )
-      ..mount('/', calllog_routes.callLogRouter(auth: auth, log: callLog).call);
+      ..mount('/', calllog_routes.callLogRouter(auth: auth, log: callLog).call)
+      ..mount('/', push_routes.pushRouter(auth: auth, tokens: pushTokens).call);
 
     return Pipeline()
         .addMiddleware(_accessLog(metrics))
