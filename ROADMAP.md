@@ -205,6 +205,14 @@ Rough calendar for one senior full-stack dev, no team politics.
 
 ## 5. Nice-to-haves
 
+### 5.0 · Adopt `flutter_chat_ui` + `rearch` in the Flutter consumer (M) — ⬜
+
+- **What:** Replace the hand-rolled chat bubbles with [`flutter_chat_ui`](https://pub.dev/packages/flutter_chat_ui); replace `provider` + `RainbowSession ChangeNotifier` with [`rearch`](https://pub.dev/packages/rearch) capsules.
+- **Where:** `c:\www\flutter\rainbow_stub_consumer` — full plan in [`PLAN.md`](../../flutter/rainbow_stub_consumer/PLAN.md) with 8 phases (A–H) and per-phase acceptance criteria.
+- **Bonus:** Phases D–H of the plan simultaneously close § 5.1 (edits), § 5.5 (reactions), § 5.6 (receipt UI), § 5.7 (typing UI), § 5.8 (threads), § 5.11 (media previews).
+- **Estimate:** ≈ 8–10 working days for the full track; ≈ 3–4 days for phases A–D (visible UX win).
+- **Acceptance:** as documented in `PLAN.md § 12 Definition of done`.
+
 ### 5.1 · XEP-0308 message correction (M) — ⬜
 
 - **What:** Server: forward `<replace id="orig">` payload; update the stored message in the messages table. Client: long-press → edit; render corrected messages with an "edited" badge.
