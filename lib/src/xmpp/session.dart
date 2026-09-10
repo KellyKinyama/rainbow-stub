@@ -44,6 +44,7 @@ class Ns {
   static const carbons2 = 'urn:xmpp:carbons:2';
   static const rsm = 'http://jabber.org/protocol/rsm';
   static const jingle = 'urn:xmpp:jingle:1';
+  static const mucCall = 'urn:rainbow:muc-call:1';
 }
 
 /// Server-wide registry of resumable Stream Management sessions.
