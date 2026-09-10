@@ -85,14 +85,32 @@ class RosterRepository {
     String status = 'accepted',
   }) {
     final now = DateTime.now().toUtc();
-    _db.db.execute(
-      '''
-      INSERT INTO roster (user_id, contact_id, status, created_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(user_id, contact_id) DO UPDATE SET status = excluded.status
-      ''',
-      [userId, contactId, status, now.toIso8601String()],
-    );
+    // Symmetric: whenever userId adds contactId, mirror the reverse so
+    // both parties see each other. Matches real Rainbow's post-accept
+    // behavior for the demo/test-drive UX.
+    _db.db.execute('BEGIN');
+    try {
+      _db.db.execute(
+        '''
+        INSERT INTO roster (user_id, contact_id, status, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, contact_id) DO UPDATE SET status = excluded.status
+        ''',
+        [userId, contactId, status, now.toIso8601String()],
+      );
+      _db.db.execute(
+        '''
+        INSERT INTO roster (user_id, contact_id, status, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, contact_id) DO UPDATE SET status = excluded.status
+        ''',
+        [contactId, userId, status, now.toIso8601String()],
+      );
+      _db.db.execute('COMMIT');
+    } catch (_) {
+      _db.db.execute('ROLLBACK');
+      rethrow;
+    }
     final c = _users.findById(contactId);
     if (c == null) {
       throw StateError('Contact $contactId not found');
@@ -106,9 +124,52 @@ class RosterRepository {
   }
 
   void remove(String userId, String contactId) {
-    _db.db.execute('DELETE FROM roster WHERE user_id = ? AND contact_id = ?', [
-      userId,
-      contactId,
-    ]);
+    // Symmetric removal — see [add] for rationale.
+    _db.db.execute('BEGIN');
+    try {
+      _db.db.execute(
+        'DELETE FROM roster WHERE user_id = ? AND contact_id = ?',
+        [userId, contactId],
+      );
+      _db.db.execute(
+        'DELETE FROM roster WHERE user_id = ? AND contact_id = ?',
+        [contactId, userId],
+      );
+      _db.db.execute('COMMIT');
+    } catch (_) {
+      _db.db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  /// One-shot migration: for every existing (u, c) entry, ensure a
+  /// matching (c, u) entry exists with the same status. Called at boot
+  /// so pre-existing asymmetric rosters become symmetric.
+  int mirrorAll() {
+    final rs = _db.db.select(
+      'SELECT user_id, contact_id, status, created_at FROM roster',
+    );
+    var mirrored = 0;
+    for (final row in rs) {
+      final u = row['user_id'] as String;
+      final c = row['contact_id'] as String;
+      final status = row['status'] as String;
+      final createdAt = row['created_at'] as String;
+      final exists = _db.db.select(
+        'SELECT 1 FROM roster WHERE user_id = ? AND contact_id = ?',
+        [c, u],
+      );
+      if (exists.isEmpty) {
+        _db.db.execute(
+          '''
+          INSERT INTO roster (user_id, contact_id, status, created_at)
+          VALUES (?, ?, ?, ?)
+          ''',
+          [c, u, status, createdAt],
+        );
+        mirrored++;
+      }
+    }
+    return mirrored;
   }
 }

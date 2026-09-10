@@ -86,6 +86,14 @@ class RainbowStubApp {
     final smRegistry = SmRegistry();
     final events = EventPusher(xmppRouter, config.xmppDomain);
     final metrics = _initMetrics(xmppRouter, smRegistry, users, bubbles);
+    // Ensure every roster entry has a reciprocal so demo re-logins
+    // (e.g. sign in as Bob after Alice added him) see each other.
+    final mirrored = roster.mirrorAll();
+    if (mirrored > 0) {
+      Logger(
+        'rainbow-stub.boot',
+      ).info('mirrored $mirrored asymmetric roster entries');
+    }
     return RainbowStubApp(
       config: config,
       db: db,
