@@ -43,6 +43,7 @@ class Ns {
   static const sm3 = 'urn:xmpp:sm:3';
   static const carbons2 = 'urn:xmpp:carbons:2';
   static const rsm = 'http://jabber.org/protocol/rsm';
+  static const jingle = 'urn:xmpp:jingle:1';
 }
 
 /// Server-wide registry of resumable Stream Management sessions.
@@ -617,10 +618,70 @@ class XmppWsSession implements XmppSession {
       _handleMamQuery(id, mamEl);
       return;
     }
+    // XEP-0166 Jingle signaling — routed opaquely to the peer.
+    final jingleEl = el.getElement('jingle', namespace: Ns.jingle);
+    if (jingleEl != null && type == 'set') {
+      _handleJingle(id, el, jingleEl);
+      return;
+    }
     // Unknown IQ — return an empty result for get/set so clients don't hang.
     if (type == 'get' || type == 'set') {
       send('<iq type="result" id="${_esc(id)}"/>');
     }
+  }
+
+  /// XEP-0166 §7 signaling routing. We don't understand the payload —
+  /// session-initiate, session-accept, session-terminate, transport-
+  /// info, content-add, etc. all pass through opaquely to the callee.
+  /// Unknown actions return a `feature-not-implemented` error so
+  /// callers can distinguish "server doesn't grok this" from "peer
+  /// hasn't responded yet".
+  void _handleJingle(String iqId, XmlElement iq, XmlElement jingle) {
+    const knownActions = {
+      'session-initiate',
+      'session-accept',
+      'session-terminate',
+      'session-info',
+      'transport-info',
+      'transport-replace',
+      'transport-accept',
+      'transport-reject',
+      'content-add',
+      'content-accept',
+      'content-modify',
+      'content-reject',
+      'content-remove',
+      'description-info',
+      'security-info',
+    };
+    final action = jingle.getAttribute('action') ?? '';
+    if (!knownActions.contains(action)) {
+      send(
+        '<iq type="error" id="${_esc(iqId)}">'
+        '<error type="cancel" code="501">'
+        '<feature-not-implemented xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/>'
+        '<text xmlns="urn:ietf:params:xml:ns:xmpp-stanzas">'
+        'Unknown Jingle action: ${_esc(action)}</text>'
+        '</error></iq>',
+      );
+      return;
+    }
+    final toAttr = iq.getAttribute('to');
+    if (toAttr == null) {
+      send(
+        '<iq type="error" id="${_esc(iqId)}">'
+        '<error type="modify" code="400">'
+        '<bad-request xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/>'
+        '</error></iq>',
+      );
+      return;
+    }
+    final to = Jid.parse(toAttr);
+    // Ack the sender immediately so their iq bookkeeping unwinds; the
+    // peer's session-accept / -terminate arrives as a separate iq.
+    send('<iq type="result" id="${_esc(iqId)}"/>');
+    final forwarded = _rewriteFrom(iq);
+    router.fanOut(to.local, forwarded);
   }
 
   void _replyDiscoInfo(String id) {
@@ -637,6 +698,7 @@ class XmppWsSession implements XmppSession {
       Ns.sm3,
       Ns.carbons2,
       Ns.rsm,
+      Ns.jingle,
     ];
     final buf = StringBuffer(
       '<iq type="result" id="${_esc(id)}" from="${_esc(domain)}" '

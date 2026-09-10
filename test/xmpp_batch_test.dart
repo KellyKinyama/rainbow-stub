@@ -416,6 +416,90 @@ void main() {
     expect(bodies, ['p3', 'p4']);
     await alice.close();
   });
+
+  // -------- XEP-0166 Jingle signaling passthrough -------------------------
+
+  test('session-initiate is routed to the callee and acked to the caller',
+      () async {
+    final alice = await connect(
+      email: 'alice@rainbow-stub.local',
+      token: aliceToken,
+      resource: 'phone',
+    );
+    final bob = await connect(
+      email: 'bob@rainbow-stub.local',
+      token: bobToken,
+      resource: 'phone',
+    );
+
+    final ackReady = alice.stream.firstWhere(
+      (e) => e.localName == 'iq' && e.getAttribute('id') == 'j-init',
+    );
+    final delivered = Completer<XmlElement>();
+    late StreamSubscription sub;
+    sub = bob.stream.listen((e) {
+      if (e.localName == 'iq' &&
+          e.getElement('jingle', namespace: 'urn:xmpp:jingle:1') != null &&
+          !delivered.isCompleted) {
+        delivered.complete(e);
+      }
+    });
+
+    alice.send(
+      '<iq type="set" id="j-init" to="$bobId@$_domain/phone">'
+      '<jingle xmlns="urn:xmpp:jingle:1" action="session-initiate" '
+      'sid="sid-1" initiator="$aliceId@$_domain/phone">'
+      '<content name="audio" creator="initiator">'
+      '<description xmlns="urn:xmpp:jingle:apps:rtp:1" media="audio"/>'
+      '<transport xmlns="urn:xmpp:jingle:transports:ice-udp:1"/>'
+      '</content>'
+      '</jingle></iq>',
+    );
+
+    final ack = await ackReady.timeout(const Duration(seconds: 3));
+    expect(ack.getAttribute('type'), 'result');
+
+    final incoming = await delivered.future.timeout(const Duration(seconds: 3));
+    final jingle = incoming.getElement('jingle', namespace: 'urn:xmpp:jingle:1');
+    expect(jingle?.getAttribute('action'), 'session-initiate');
+    expect(jingle?.getAttribute('sid'), 'sid-1');
+    expect(incoming.getAttribute('from'), startsWith('$aliceId@$_domain'));
+
+    await sub.cancel();
+    await alice.close();
+    await bob.close();
+  });
+
+  test('unknown Jingle action returns feature-not-implemented', () async {
+    final alice = await connect(
+      email: 'alice@rainbow-stub.local',
+      token: aliceToken,
+      resource: 'phone',
+    );
+
+    final resp = alice.stream.firstWhere(
+      (e) => e.localName == 'iq' && e.getAttribute('id') == 'j-bogus',
+    );
+    alice.send(
+      '<iq type="set" id="j-bogus" to="$bobId@$_domain/phone">'
+      '<jingle xmlns="urn:xmpp:jingle:1" action="does-not-exist" '
+      'sid="sid-x"/>'
+      '</iq>',
+    );
+
+    final iq = await resp.timeout(const Duration(seconds: 3));
+    expect(iq.getAttribute('type'), 'error');
+    expect(
+      iq
+          .getElement('error')
+          ?.getElement(
+            'feature-not-implemented',
+            namespace: 'urn:ietf:params:xml:ns:xmpp-stanzas',
+          ),
+      isNotNull,
+    );
+    await alice.close();
+  });
 }
 
 class _Xmpp {
