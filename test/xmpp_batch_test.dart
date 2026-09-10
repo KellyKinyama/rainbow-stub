@@ -356,7 +356,8 @@ void main() {
       );
       await done.future.timeout(const Duration(seconds: 3));
       await sub.cancel();
-      expect(bodies, ['msg 1', 'msg 2', 'msg 3']);
+      // No anchor + max=3 → the LAST 3 in chronological order.
+      expect(bodies, ['msg 3', 'msg 4', 'msg 5']);
       expect(countReported, 5);
       await alice.close();
     },

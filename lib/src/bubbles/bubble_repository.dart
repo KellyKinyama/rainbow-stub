@@ -323,7 +323,9 @@ class BubbleRepository {
     return _db.db.updatedRows > 0;
   }
 
-  /// XEP-0313 + RSM-aware slice for bubble history.
+  /// XEP-0313 + RSM-aware slice for bubble history. No anchor or
+  /// `<before>` returns the NEWEST [max] messages (in chronological
+  /// ASC order within the page); `<after>` walks forward.
   ({List<BubbleMessage> page, int total}) mamSlice(
     String bubbleId, {
     int max = 50,
@@ -358,10 +360,15 @@ class BubbleRepository {
           ..add(anchor.id);
       }
     }
-    sql += ' ORDER BY sent_at ASC, id ASC LIMIT ?';
+    final walkForward = afterId != null && afterId.isNotEmpty;
+    sql += walkForward
+        ? ' ORDER BY sent_at ASC, id ASC LIMIT ?'
+        : ' ORDER BY sent_at DESC, id DESC LIMIT ?';
     params.add(max);
     final rs = _db.db.select(sql, params);
-    return (page: rs.map(_rowToBubbleMessage).toList(), total: total);
+    var page = rs.map(_rowToBubbleMessage).toList();
+    if (!walkForward) page = page.reversed.toList();
+    return (page: page, total: total);
   }
 
   ({String id, String sentAt})? _findBmsgAnchor(String id) {

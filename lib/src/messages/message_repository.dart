@@ -106,8 +106,14 @@ class MessageRepository {
     return rs.map(_rowToChat).toList();
   }
 
-  /// XEP-0313 + RSM-aware slice: pages FORWARD (chronological) with
-  /// optional `before`/`after` MAM stanza-id anchors.
+  /// XEP-0313 + RSM-aware slice. Each returned page is chronological
+  /// (ASC), but the WINDOW of the archive it comes from depends on the
+  /// anchor:
+  ///   - no anchor or `beforeId` → the newest [max] messages older
+  ///     than the anchor (or newest [max] overall).
+  ///   - `afterId` → the oldest [max] messages newer than the anchor.
+  /// This matches XEP-0313 §4.3 "final page" semantics: with no RSM
+  /// the client receives the tail of the archive.
   ({List<ChatMessage> page, int total}) mamSlice(
     Jid a,
     Jid b, {
@@ -127,7 +133,6 @@ class MessageRepository {
     if (beforeId != null && beforeId.isNotEmpty) {
       final anchor = _findAnchor(beforeId);
       if (anchor != null) {
-        // (sent_at, id) < (anchor.sent_at, anchor.id)  — ties break by id.
         sql += ' AND (sent_at < ? OR (sent_at = ? AND id < ?))';
         params
           ..add(anchor.sentAt)
@@ -145,10 +150,17 @@ class MessageRepository {
           ..add(anchor.id);
       }
     }
-    sql += ' ORDER BY sent_at ASC, id ASC LIMIT ?';
+    // No anchor or `<before>` → grab the NEWEST [max] via DESC, then
+    // reverse to chronological. `<after>` walks forward, keep ASC.
+    final walkForward = afterId != null && afterId.isNotEmpty;
+    sql += walkForward
+        ? ' ORDER BY sent_at ASC, id ASC LIMIT ?'
+        : ' ORDER BY sent_at DESC, id DESC LIMIT ?';
     params.add(max);
     final rs = _db.db.select(sql, params);
-    return (page: rs.map(_rowToChat).toList(), total: total);
+    var page = rs.map(_rowToChat).toList();
+    if (!walkForward) page = page.reversed.toList();
+    return (page: page, total: total);
   }
 
   ({String id, String sentAt})? _findAnchor(String id) {
