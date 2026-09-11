@@ -402,17 +402,9 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 - **Landed in:** `rainbow_stub_consumer` commit `cd9ce3f`. `connectivity_plus` added; `connectivity_capsule.dart` subscribes to `Connectivity().onConnectivityChanged`, seeded with `checkConnectivity()` on mount and exposing a reactive `bool` (true when any transport is non-none). `HomePage` stacks an `_OfflineBanner` (surfaceContainerHighest + `wifi_off`) above content whenever `!online`, coexisting with the permissions banner. `ContactsTab` gains a filter-in-place search bar at the top (case-insensitive `display` / `loginEmail` contains) with a friendly empty state; `BubblesTab` gains an equivalent search bar (name / topic) with the invitations section always pinned above.
 
-### 7.10 · Group-call advanced controls (M) — ⬜
+### 7.10 · Group-call advanced controls (M) — ✅ (2026-09-11)
 
-- **Gap:** `GroupCallScreen` has mic / camera / leave only. RN
-  `ConferenceCallComponent` also has loudspeaker, lock room,
-  add-participant, delegate host, hide-view / share-view.
-- **Sketch:** Extend `GroupCallManager` with `setLoudspeakerEnabled`
-  / `lockRoom` / `promoteToHost`; wire buttons in
-  `GroupCallScreen`. Requires matching ion-sfu control channel
-  wire — some features may need custom XMPP payloads on top of the
-  MUC-call marker (`urn:rainbow:muc-call:1`).
-- **Estimate:** M.
+- **Landed in:** `rainbow_stub_consumer` commit `c61878c`. `RtcSession` gained `setSpeakerphoneEnabled(bool)` (routed through `flutter_webrtc`'s `Helper.setSpeakerphoneOn`; silent no-op on desktop / web); `SfuGroupCallSession` passes through. `GroupCallManager` tracks a client-side `ActiveGroupCall.locked` flag with a `setRoomLocked` toggle (RN parity only — no wire effect against this stub). `GroupCallScreen` now takes a `RainbowBubble` so it can compute moderator status from `bubble.members` and open the invite sheet without an extra fetch. Bottom row expanded to eight controls (mic, camera, speaker, camera-flip, add-participant, lock (moderator-only), hide-view, leave) via `Wrap` so narrow viewports don't overflow; a `Locked` chip renders top-left when the moderator has locked the room. Add-participant reuses the extracted `showBubbleContactPicker` (new `lib/ui/bubble_invite_sheet.dart`) shared with `BubbleDetailsPage`. Hide-view does a `Navigator.maybePop` back to `BubbleChatPage` while the call keeps running.
 
 **Sprint 1 (2026-09-11):** ✅ 7.1 + 7.2 + 7.7 landed in `rainbow_stub_consumer` commit `0174685` (registration, forgot-password, MyProfile, Forward).
 
@@ -422,7 +414,7 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 **Sprint 4 (2026-09-11):** ✅ 7.6 landed in `rainbow_stub_consumer` commit `642768e` (per-peer shared files list with sort + swipe-to-delete + inline image preview).
 
-**Remaining open:** 7.10 (Group-call advanced controls). Combined estimate M ≈ 2–3 days.
+**Sprint 5 (2026-09-11):** ✅ 7.10 landed in `rainbow_stub_consumer` commit `c61878c` (group-call advanced controls: speaker, add-participant, moderator lock, hide-view). Section 7 is now complete — no remaining parity gaps against the RN sample.
 
 ---
 
