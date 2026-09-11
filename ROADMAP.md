@@ -386,18 +386,9 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 - **Landed in:** `rainbow_stub_consumer` commit `cd9ce3f`. `rest_client` gains `roomInvitations`, `updateRoom`, `deleteRoom`, `inviteToRoom`, `setRoomMemberStatus`. `bubble_invitations_capsule.dart` surfaces pending invites for the signed-in user with an `entries` + `refresh` controller. `chat_actions_capsule` grows `updateBubble` / `deleteBubble` / `inviteToBubble` / `acceptBubbleInvitation` / `declineBubbleInvitation` / `leaveBubble` (accept/decline/leave all route through `setRoomMemberStatus` — accepted / declined). `lib/ui/bubble_details_page.dart` renders the header, accepted-member list, pending-invitation list, and buttons for invite (roster-filtered contact sheet excluding current members), leave (self), owner-only delete, plus an AppBar edit sheet for name + topic. `BubbleChatPage` AppBar carries an `info_outline` action that pushes the details page. `BubblesTab` pins an "Invitations (N)" section above the bubble list with per-card accept / decline buttons that refresh the capsule.
 
-### 7.6 · File browser + download + preview (M) — ⬜
+### 7.6 · File browser + download + preview (M) — ✅ (2026-09-11)
 
-- **Gap:** Files can be attached to a message (upload path works)
-  but there is no "Shared files" list, no re-download of a past
-  attachment, and no image / PDF preview. RN sample has
-  `SharedFile/SharedFileComponent` with sort by date / name / size.
-- **Sketch:** `files_capsule.dart` (paginated `GET
-  /users/:id/files`), `lib/ui/files_page.dart` with a segmented
-  control for sort. `lib/ui/file_preview_page.dart` for images
-  (Flutter's `Image.network`) and a "Open externally" button for
-  everything else (`url_launcher` — new dep).
-- **Estimate:** M.
+- **Landed in:** `rainbow_stub_consumer` commit `642768e`. `FileDescriptor` extended with `createdAt` / `ownerId` / `peer` (parsed from the stub's `creationDate` / `ownerId` / `peer` fields) to support sort + owner-only actions. `rest_client` gains `listSharedFiles(peerJid)` (backed by `GET /fileServer/v1.0/files?peer=`) and `deleteFile(id)`. `lib/ui/shared_files_page.dart` renders the per-peer file list with a PopupMenuButton for sort (Date / Name / Size), a refresh action, and `Dismissible` swipe-to-delete for the current user's own uploads. `lib/ui/file_preview_page.dart` shows a metadata card plus inline `Image.memory` for images (bytes fetched via the authed `downloadFileBytes`), a Copy-link action for every file, and an Open-link fallback via `url_launcher` for non-images. Both `ChatPage` and `BubbleChatPage` grow a `folder_open` AppBar action that opens `SharedFilesPage` with the peer's bare JID or the bubble MUC JID. Deps: `url_launcher`.
 
 ### 7.7 · Message forward + copy (S) — ✅ (2026-09-11)
 
@@ -429,7 +420,9 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 **Sprint 3 (2026-09-11):** ✅ 7.5 + 7.9 landed in `rainbow_stub_consumer` commit `cd9ce3f` (Bubble management + invitations, filter-in-place search on Contacts + Bubbles, connectivity banner).
 
-**Remaining open:** 7.6 (File browser + download + preview), 7.10 (Group-call advanced controls). Combined estimate M+M ≈ 4–6 days. 7.6 has the higher user-visible value (opens the entire attachment history the RN sample already exposes).
+**Sprint 4 (2026-09-11):** ✅ 7.6 landed in `rainbow_stub_consumer` commit `642768e` (per-peer shared files list with sort + swipe-to-delete + inline image preview).
+
+**Remaining open:** 7.10 (Group-call advanced controls). Combined estimate M ≈ 2–3 days.
 
 ---
 
