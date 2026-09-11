@@ -366,31 +366,13 @@ session log. The Flutter client covers **core chat + calls end-to-end**
 and is **ahead** on reactions and edits. What's still missing to reach
 feature parity with the RN reference, ordered by user-visible impact:
 
-### 7.1 · Registration + Forgot-password screens (S) — ⬜
+### 7.1 · Registration + Forgot-password screens (S) — ✅ (2026-09-11)
 
-- **Gap:** New users cannot create an account; existing users cannot
-  recover a password. The Flutter client only offers sign-in against
-  the two seeded users (`alice` / `bob`).
-- **Server state:** `POST /self-register/*` and `POST /reset-password/*`
-  are already implemented and tested on the stub (phase 1).
-- **Sketch:** `lib/ui/register_page.dart` (multi-step: email → token
-  → profile), `lib/ui/forgot_password_page.dart`; wire from
-  `LoginPage` via secondary buttons. Extend `rest_client.dart` with
-  `selfRegisterSendEmail` / `selfRegisterConfirm` /
-  `resetPasswordSendEmail` / `resetPasswordConfirm` methods.
-- **Estimate:** S (well under a day).
+- **Landed in:** `rainbow_stub_consumer` commit `0174685`. `RestClient.selfRegisterSendEmail` / `selfRegister` / `resetPasswordSendEmail` / `resetPassword` wrap the corresponding stub routes. `lib/ui/register_page.dart` is a two-step form (email → confirm+password+names) that auto-signs-in on completion; `lib/ui/forgot_password_page.dart` is a two-step form (email → token+new password) that returns to the login screen. LoginPage now surfaces both as text buttons under the sign-in action. Dev-token is echoed in the response so demos skip the real mailbox.
 
-### 7.2 · MyProfile view + edit (M) — ⬜
+### 7.2 · MyProfile view + edit (M) — ✅ (2026-09-11)
 
-- **Gap:** No page to view or edit the signed-in user's own profile —
-  name, phone numbers, emails, job title, company, avatar. The
-  diagnostics overlay shows JID + connection state, but that's it.
-- **Server state:** `PUT /users/:id`, `GET /users/:id`, `POST
-  /users/:id/photo` already work.
-- **Sketch:** `lib/ui/profile_page.dart` (read-only card + Edit
-  button), `lib/ui/profile_edit_page.dart`, `me_capsule.dart` for
-  the reactive slot. Reuse `AttachmentPicker` for avatar.
-- **Estimate:** M.
+- **Landed in:** `rainbow_stub_consumer` commit `0174685`. `RainbowUser` grew `nickName`, `title`, `language`. `RestClient.updateMe` wraps `PUT /users/:id`. `AuthController` gains `refreshMe()` (re-fetches `GET /users/:id` and hot-swaps the `authStateCapsule` slot) and `updateMe(...)` (PUT + slot swap in one call). `lib/ui/profile_page.dart` renders a read-only avatar + field card with a refresh button; `lib/ui/profile_edit_page.dart` seeds fields from the current `me` and dispatches `auth.updateMe` on save. HomePage popup menu now surfaces "My profile" above the presence switcher. Avatar upload (`POST /users/:id/photo`) is not yet wired — UI shows an initials bubble until it is.
 
 ### 7.3 · 1:1 Conversations list (M) — ⬜
 
@@ -443,18 +425,9 @@ feature parity with the RN reference, ordered by user-visible impact:
   everything else (`url_launcher` — new dep).
 - **Estimate:** M.
 
-### 7.7 · Message forward + copy (S) — ⬜
+### 7.7 · Message forward + copy (S) — ✅ (2026-09-11)
 
-- **Gap:** Long-press sheet in `ChatPage` / `BubbleChatPage` has
-  React / Reply / Edit / Delete but not Forward / Copy. Users cannot
-  re-send a received message to another thread or copy text to the
-  clipboard.
-- **Sketch:** Add two entries to `showMessageActions`. Copy uses
-  `Clipboard.setData`. Forward opens a picker (contact + bubble
-  list, reused from the Bubbles tab) then dispatches
-  `chatActions.sendPeer` / `sendGroup` with the original body +
-  attachment on the chosen target.
-- **Estimate:** S.
+- **Landed in:** `rainbow_stub_consumer` commit `0174685`. Copy was already wired (`CopyChoice` → `Clipboard.setData`). Forward adds `ForwardChoice` to `MessageActionChoice` + a Forward tile in the long-press sheet; `lib/ui/forward_picker.dart` lists joined rooms + roster contacts as a fullscreen dialog; both `chat_page.dart` and `bubble_chat_page.dart` route the picked target through the existing `chatActions.sendPeer` / `sendGroup`. Text-body forwarding only for now — forwarding an attachment carries the text body but not the file descriptor.
 
 ### 7.8 · Runtime permissions bootstrap (S) — ⬜
 
@@ -490,9 +463,9 @@ feature parity with the RN reference, ordered by user-visible impact:
   MUC-call marker (`urn:rainbow:muc-call:1`).
 - **Estimate:** M.
 
-**Suggested next sprint:** 7.1 + 7.2 + 7.7. All three are user-visible
-gaps that unlock realistic self-serve usage of the Flutter client; the
-server is fully ready for all three; combined estimate is 3–4 days.
+**Sprint 1 (2026-09-11):** ✅ 7.1 + 7.2 + 7.7 landed together in `rainbow_stub_consumer` commit `0174685`. Registration, forgot-password, MyProfile view+edit, and Forward now ship in the Flutter client.
+
+**Suggested next sprint:** 7.3 (1:1 Conversations list) + 7.4 (Call history page) + 7.8 (Runtime permissions bootstrap). 7.3 and 7.4 both unlock discoverability of prior activity — the two features new users most obviously miss. 7.8 removes the mid-call permission-prompt jank on Android. Server is fully ready for all three; combined estimate ≈ 4–5 days.
 
 ---
 
