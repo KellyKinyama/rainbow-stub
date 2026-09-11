@@ -374,29 +374,13 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 - **Landed in:** `rainbow_stub_consumer` commit `0174685`. `RainbowUser` grew `nickName`, `title`, `language`. `RestClient.updateMe` wraps `PUT /users/:id`. `AuthController` gains `refreshMe()` (re-fetches `GET /users/:id` and hot-swaps the `authStateCapsule` slot) and `updateMe(...)` (PUT + slot swap in one call). `lib/ui/profile_page.dart` renders a read-only avatar + field card with a refresh button; `lib/ui/profile_edit_page.dart` seeds fields from the current `me` and dispatches `auth.updateMe` on save. HomePage popup menu now surfaces "My profile" above the presence switcher. Avatar upload (`POST /users/:id/photo`) is not yet wired — UI shows an initials bubble until it is.
 
-### 7.3 · 1:1 Conversations list (M) — ⬜
+### 7.3 · 1:1 Conversations list (M) — ✅ (2026-09-11)
 
-- **Gap:** The Flutter home has Contacts + Bubbles tabs but no
-  "Recent conversations" tab like the RN sample's
-  `Conversations/ConversationsComponent`. Users can reach a peer
-  chat only by drilling in from Contacts. A user with active 1:1
-  threads has no fast way to jump back to them.
-- **Sketch:** New `conversations_capsule.dart` reduces over the peer
-  half of `messages_capsule`'s cache + roster to produce a
-  last-message-per-peer list. `lib/ui/conversations_tab.dart`
-  renders it. Add a third `NavigationDestination` to `HomePage`.
-- **Estimate:** M.
+- **Landed in:** `rainbow_stub_consumer` commit `8e38a4d`. `conversationsCapsule` reduces every 1:1 `XmppChatMessage` the client observes into a peer-indexed recency slot, enriched via `rosterCapsule` for display names. `ConversationsTab` renders the sorted list with an avatar, direction-prefixed subtitle, and a today-time / DD-MM timestamp. HomePage nav becomes three tabs: **Recent** (default) | Contacts | Bubbles. Session-scoped by design — pre-existing threads stay in Contacts until the peer sends something or the user opens the thread (server-side conversations endpoint would need ROADMAP § 1.3 to hydrate history).
 
-### 7.4 · Call history page (M) — ⬜
+### 7.4 · Call history page (M) — ✅ (2026-09-11)
 
-- **Gap:** REST call-log CRUD works (`POST/GET/DELETE /users/:id/calllogs`
-  already tested; the CallManager already POSTs every ended call), but
-  there's no UI to browse it. RN sample has `CallLogComponent` with
-  missed / all / voicemail filters.
-- **Sketch:** `call_log_capsule.dart` streams via `GET
-  /users/:id/calllogs` with paging. `lib/ui/call_log_page.dart`
-  renders grouped by day. Add a "Recent calls" tab or route.
-- **Estimate:** M.
+- **Landed in:** `rainbow_stub_consumer` commit `8e38a4d`. `CallLogEntry` client model wraps the stub's `/users/:id/calllogs` shape; `rest_client.listCallLogs` + `deleteCallLog` cover the missing CRUD. `callLogsCapsule` wraps rearch's `AsyncValue` lifecycle with a refresh + delete controller and hot-reloads on sign-in. `CallLogPage` renders a `SegmentedButton` (All / Missed), swipe-to-delete rows, and directional icons (`call_made`, `call_received`, `call_missed`, `call_end`, `error_outline`). Wired via HomePage popup menu → "Recent calls".
 
 ### 7.5 · Bubble management + invitations (M) — ⬜
 
@@ -429,17 +413,9 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 - **Landed in:** `rainbow_stub_consumer` commit `0174685`. Copy was already wired (`CopyChoice` → `Clipboard.setData`). Forward adds `ForwardChoice` to `MessageActionChoice` + a Forward tile in the long-press sheet; `lib/ui/forward_picker.dart` lists joined rooms + roster contacts as a fullscreen dialog; both `chat_page.dart` and `bubble_chat_page.dart` route the picked target through the existing `chatActions.sendPeer` / `sendGroup`. Text-body forwarding only for now — forwarding an attachment carries the text body but not the file descriptor.
 
-### 7.8 · Runtime permissions bootstrap (S) — ⬜
+### 7.8 · Runtime permissions bootstrap (S) — ✅ (2026-09-11)
 
-- **Gap:** RN sample explicitly requests camera / mic / contacts /
-  notifications permissions on first launch. Flutter relies on the
-  OS to prompt on first `getUserMedia` / attachment pick — which
-  means a user who taps "call" for the first time on Android sees
-  the permission dialog interrupt the ringing state.
-- **Sketch:** Add `permission_handler` (new dep); post-sign-in,
-  request camera + mic + notifications up front; render a rationale
-  card if any are denied.
-- **Estimate:** S.
+- **Landed in:** `rainbow_stub_consumer` commit `8e38a4d`. `pubspec` adds `permission_handler`; `permissionsCapsule` fires `Permission.[camera, microphone, notification].request()` once on sign-in and exposes a per-slot `PermissionsState`. Web is treated as unsupported (browsers gate on `getUserMedia` per-tab). HomePage renders an `errorContainer` banner with a Retry button whenever any of the three is denied — covers the RN sample's up-front rationale UX.
 
 ### 7.9 · Global search + connectivity banner (M) — ⬜
 
@@ -463,9 +439,11 @@ feature parity with the RN reference, ordered by user-visible impact:
   MUC-call marker (`urn:rainbow:muc-call:1`).
 - **Estimate:** M.
 
-**Sprint 1 (2026-09-11):** ✅ 7.1 + 7.2 + 7.7 landed together in `rainbow_stub_consumer` commit `0174685`. Registration, forgot-password, MyProfile view+edit, and Forward now ship in the Flutter client.
+**Sprint 1 (2026-09-11):** ✅ 7.1 + 7.2 + 7.7 landed in `rainbow_stub_consumer` commit `0174685` (registration, forgot-password, MyProfile, Forward).
 
-**Suggested next sprint:** 7.3 (1:1 Conversations list) + 7.4 (Call history page) + 7.8 (Runtime permissions bootstrap). 7.3 and 7.4 both unlock discoverability of prior activity — the two features new users most obviously miss. 7.8 removes the mid-call permission-prompt jank on Android. Server is fully ready for all three; combined estimate ≈ 4–5 days.
+**Sprint 2 (2026-09-11):** ✅ 7.3 + 7.4 + 7.8 landed in `rainbow_stub_consumer` commit `8e38a4d` (Conversations tab, Call-history page, runtime permissions bootstrap).
+
+**Remaining open:** 7.5 (Bubble management + invitations), 7.6 (File browser + download + preview), 7.9 (Global search + connectivity banner), 7.10 (Group-call advanced controls). Combined estimate M+M+M+M ≈ 8–10 days. 7.5 has the highest self-serve unlock — without it there's no way to invite a fresh user into a bubble from the client.
 
 ---
 
