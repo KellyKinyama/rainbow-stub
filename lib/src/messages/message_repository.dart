@@ -106,6 +106,30 @@ class MessageRepository {
     return rs.map(_rowToChat).toList();
   }
 
+  /// XEP-0313 archive slice for [user] across every 1:1 conversation
+  /// they've been a party to. Returns the newest [max] messages in
+  /// chronological order. Used by the Recent tab to hydrate on
+  /// sign-in without knowing every peer in advance.
+  ({List<ChatMessage> page, int total}) mamSliceForUser(
+    Jid user, {
+    int max = 50,
+  }) {
+    final bare = user.bare;
+    final total =
+        _db.db.select(
+              'SELECT COUNT(*) AS n FROM messages WHERE from_jid LIKE ? OR to_jid LIKE ?',
+              ['$bare%', '$bare%'],
+            ).first['n']
+            as int;
+    final rs = _db.db.select(
+      'SELECT * FROM messages WHERE from_jid LIKE ? OR to_jid LIKE ? '
+      'ORDER BY sent_at DESC, id DESC LIMIT ?',
+      ['$bare%', '$bare%', max],
+    );
+    final page = rs.map(_rowToChat).toList().reversed.toList();
+    return (page: page, total: total);
+  }
+
   /// XEP-0313 + RSM-aware slice. Each returned page is chronological
   /// (ASC), but the WINDOW of the archive it comes from depends on the
   /// anchor:

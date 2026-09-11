@@ -189,9 +189,9 @@ class RainbowStubApp {
 
     return Pipeline()
         .addMiddleware(_accessLog(metrics))
+        .addMiddleware(_cors())
         .addMiddleware(_errorMapper())
         .addMiddleware(_securityHeaders(config.tls))
-        .addMiddleware(_cors())
         .addHandler(router.call);
   }
 

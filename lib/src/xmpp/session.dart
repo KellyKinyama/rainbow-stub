@@ -734,16 +734,31 @@ class XmppWsSession implements XmppSession {
 
   void _handleMamQuery(String queryId, XmlElement query) {
     final withVal = _mamField(query, 'with');
+    final rsm = query.getElement('set', namespace: Ns.rsm);
+    var max = int.tryParse(rsm?.getElement('max')?.innerText ?? '') ?? 50;
+    if (max > 200) max = 200;
+    if (max < 1) max = 1;
+
     if (withVal == null) {
-      send('<iq type="error" id="${_esc(queryId)}"/>');
+      // No `with` filter — return the newest [max] archived 1:1
+      // stanzas across all peers, used by the client's Recent-tab
+      // bootstrap on sign-in.
+      final slice = messages.mamSliceForUser(_jid, max: max);
+      for (final m in slice.page) {
+        send(_wrapForMam(queryId, m));
+      }
+      send(
+        _mamFin(
+          queryId,
+          slice.page,
+          total: slice.total,
+          complete: slice.page.length < max,
+        ),
+      );
+      _replayReactionsFor1To1(slice.page);
       return;
     }
     final peer = Jid.parse(withVal);
-    final rsm = query.getElement('set', namespace: Ns.rsm);
-    var max = int.tryParse(rsm?.getElement('max')?.innerText ?? '') ?? 50;
-    // Cap page size — protects the server from over-large queries.
-    if (max > 200) max = 200;
-    if (max < 1) max = 1;
     final beforeId = rsm?.getElement('before')?.innerText;
     final afterId = rsm?.getElement('after')?.innerText;
 
