@@ -59,10 +59,19 @@ Router userRouter({
       throw RainbowError.notFound('Contact not found');
     }
     final entry = roster.add(me.id, contactId);
+    final domain = _xmppDomain(req);
     events.pushRosterItem(
       me.id,
-      contactJid: '$contactId@${_xmppDomain(req)}',
+      contactJid: '$contactId@$domain',
       name: contact.displayName,
+    );
+    // Mirror push: the contact's roster.add is symmetric server-side,
+    // so surface the same item to the contact's client too. Without
+    // this, an incoming chat from the adder shows up as a raw user id.
+    events.pushRosterItem(
+      contactId,
+      contactJid: '${me.id}@$domain',
+      name: me.displayName,
     );
     return jsonOk({
       'data': entry.toRainbowJson(
@@ -81,10 +90,9 @@ Router userRouter({
       throw RainbowError.notFound('Not in roster');
     }
     roster.remove(me.id, contactId);
-    events.pushRosterRemove(
-      me.id,
-      contactJid: '$contactId@${_xmppDomain(req)}',
-    );
+    final domain = _xmppDomain(req);
+    events.pushRosterRemove(me.id, contactJid: '$contactId@$domain');
+    events.pushRosterRemove(contactId, contactJid: '${me.id}@$domain');
     return jsonOk({'status': 'ok'});
   });
 
