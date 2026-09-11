@@ -7,28 +7,40 @@ each time.
 - **Estimate legend:** S ≈ under a day · M ≈ 1–3 days · L ≈ 3–7 days · XL ≈ multi-week
 - **Status legend:** ✅ done · 🟡 partial · ⬜ open · 🕒 deferred
 
-Last updated: **2026-09-09**.
+Last updated: **2026-09-11**.
 
 ---
 
 ## Where we are today
 
-- **Server** — `rainbow-stub` at commit `09df0a8` on `main`:
-  - Phase 0–4 REST surface (auth, users, roster, presence, avatars, bubbles, files, call-log)
-  - XMPP-over-WS with SASL PLAIN, resource binding, SM, carbons, MAM+RSM, MUC light, disco, ping, receipts
-  - Hardening (stanza size, queue caps, session caps, keepalive, SmRegistry per-user cap, XXE guard, HSTS + OWASP headers)
+- **Server** — `rainbow-stub` at commit `6a9046b` on `main`:
+  - Phase 0–4 REST surface (auth, users, roster, presence, avatars, bubbles, files, call-log, push-tokens)
+  - XMPP-over-WS with SASL PLAIN, resource binding, SM (with resume), carbons, MAM+RSM, MUC light, disco, ping, receipts
+  - XEP-0166 Jingle passthrough (session-initiate / -accept / -terminate / transport-info), XEP-0424 retract, XEP-0444 reactions, XEP-0308 corrections
+  - MUC group-call marker (`urn:rainbow:muc-call:1`) fan-out for bubble-scoped call signaling
+  - Hardening (stanza size, queue caps, session caps, keepalive, SmRegistry per-user cap, XXE guard, HSTS + OWASP headers, CORS)
   - Observability (JSON logs, Prometheus `/metrics`, auto-generated TLS)
+  - HTTP-only smoke config (`config/rainbow-stub-smoke.yaml`) for real-device runs
   - **41 tests**, all green
-- **Client** — `rainbow_stub_consumer` at commit `809bc25` on `main`:
-  - REST + XMPP-WS wiring, presence-aware contacts, 1:1 chat, bubbles, MUC join
-  - Windows + Web build targets working; Android not yet added
-  - 3 unit + 3 integration tests
+- **Client** — `rainbow_stub_consumer` at commit `bf6647d` on `feat/chat-ui-rearch`:
+  - `rearch` capsules across the state layer, `flutter_chat_ui` for the message list, `flutter_webrtc` for calls
+  - REST + XMPP-WS wiring, presence-aware contacts, 1:1 + MUC chat, MAM pagination, reactions, edits, retracts, replies, receipts, chat-states, SM resume
+  - Attachments (file + camera), push-token registration
+  - Full 1:1 audio + video calling with Jingle signaling, incoming-call banner, CallScreen full-bleed, camera-off graceful degradation, audible ringer on web + haptic on mobile
+  - Group calls via ion-sfu JSON-RPC signaling with adaptive video grid
+  - Windows + web + Android platform targets scaffolded, `--dart-define` runtime endpoint override
+  - Debug-only diagnostics overlay (drag + long-press to hide)
+  - **115/115 offline tests, 8/8 live-integration tests**, analyzer clean
 - **UAT** — [UAT.md](UAT.md), 2026-09-09, pass, 14 HTTP requests, 0 errors
+- **Live smoke** — Browser ↔ browser end-to-end verified: sign-in, 1:1 + group chat both directions, 1:1 audio + video, reactions, edits, retracts, MAM scroll, XEP-0198 resume; see [`rainbow_stub_consumer/docs/phase-live-smoke-log.md`](../../flutter/rainbow_stub_consumer/docs/phase-live-smoke-log.md).
 
 > Wondering how this stacks up against WhatsApp / MS Teams? See **[§ 4](#4-product-parity--the-whatsappteams-gap)**
 > for a feature grid, effort estimates by target ("full chat" / "small-team" /
 > "WhatsApp-tier" / "Teams-tier"), and the closing-the-gap sequences in
-> **[§ 8](#8-my-picks-if-you-only-do-one-thing-next)**.
+> **[§ 9](#9-my-picks-if-you-only-do-one-thing-next)**.
+>
+> For the **React Native sample parity gap** (what `Rainbow-React-Native-Samples`
+> ships that our Flutter client doesn't yet), see **[§ 7](#7-parity-with-the-rainbow-react-native-sample)**.
 
 ---
 
@@ -42,12 +54,13 @@ Last updated: **2026-09-09**.
 - **Depends on:** nothing.
 - **Closes:** the "not exercised" note in [UAT.md § 6](UAT.md#6-areas-not-exercised-in-this-uat).
 
-### 1.2 · File upload/download UI (M) — ⬜
+### 1.2 · File upload/download UI (M) — 🟡
 
 - **What:** File picker in the chat composer → multipart `POST /fileServer/v1.0/files` → attach the descriptor id to the outgoing message → render as a card in the chat with a download button.
 - **Where:** New `lib/rainbow/files_client.dart`, new `FileMessage` model, `ChatComposer` widget, tweaks to `ChatPage` / `BubbleChatPage`.
 - **Acceptance:** Alice picks a PDF from disk, it shows up in Bob's session as a downloadable card. `FileAttachFinished` push event received in the UI (already fires server-side).
 - **Depends on:** nothing.
+- **Status 2026-09-11:** Upload path is complete (`AttachmentPicker` in `lib/ui/attachment_picker.dart` → REST upload → file descriptor attached as XMPP `<file/>` payload). **Download UI is still missing** — a received file bubble shows the name + MIME but has no tap-to-open / save action.
 
 ### 1.3 · Local message persistence (M) — ⬜
 
@@ -60,13 +73,10 @@ Last updated: **2026-09-09**.
 
 ## 2. Wire compat + surface completeness
 
-### 2.1 · React Native Rainbow sample end-to-end (M–L) — ⬜
+### 2.1 · React Native Rainbow sample end-to-end (M–L) — 🕒 superseded
 
 - **What:** Point the unmodified [`react-native-rainbow-module`](../../node/Rainbow-React-Native-Samples) sample at the stub on an Android emulator; drive Login → Contacts → Chat → Bubbles → File share; fix each wire-compat gap the native SDK complains about; land a regression test on the stub for every gap.
-- **Where:** Almost all fixes will be in `c:\www\dart\rainbow-stub` — endpoint shapes, header casings, field names.
-- **Acceptance:** RN sample logs in as alice, shows all 4 roster contacts with correct presence, sends and receives a 1:1 message, joins the seed bubble, sends a group message. Each fix has a matching `test/` entry.
-- **Depends on:** Android emulator + rooted image for cert install (see [RUNBOOK § 4c](RUNBOOK.md#4c-android-emulator)).
-- **Blocks:** advertising the stub as "wire-compatible with the real Rainbow backend" publicly.
+- **Status 2026-09-11:** No longer the primary target — we now have a **Flutter reference client** (`rainbow_stub_consumer`) that exercises the same wire and is the first-class citizen. The RN sample is still a useful compatibility oracle but is not being driven end-to-end. See **[§ 7](#7-parity-with-the-rainbow-react-native-sample)** for the feature-parity gap between the Flutter client and the RN sample.
 
 ### 2.2 · Registration + Forgot-password screens (S) — ⬜
 
@@ -213,53 +223,45 @@ Rough calendar for one senior full-stack dev, no team politics.
 - **Estimate:** ≈ 8–10 working days for the full track; ≈ 3–4 days for phases A–D (visible UX win).
 - **Acceptance:** as documented in `PLAN.md § 12 Definition of done`.
 
-### 5.1 · XEP-0308 message correction (M) — ⬜
+### 5.1 · XEP-0308 message correction (M) — ✅ (2026-09-11)
 
 - **What:** Server: forward `<replace id="orig">` payload; update the stored message in the messages table. Client: long-press → edit; render corrected messages with an "edited" badge.
-- **Acceptance:** Alice edits a sent message; Bob's UI updates in place without duplicate bubbles.
-- **Parity:** Closes "Message edit / delete" gap vs. WhatsApp + Teams.
+- **Landed in:** stub `session.dart` correction forwarding + `messages` update; client `xmpp_client.dart` `XmppMessageCorrection` event + `chat_actions_capsule.editPeer / editGroup` + long-press "Edit" tile in `ChatPage` / `BubbleChatPage`.
 
-### 5.2 · XEP-0198 SM in the Flutter client (M) — ⬜
+### 5.2 · XEP-0198 SM in the Flutter client (M) — ✅ (2026-09-10)
 
 - **What:** After bind, send `<enable resume="true"/>`; track `hIn`/`hOut`; on WS drop, reconnect and send `<resume previd=… h=…/>`.
-- **Where:** `lib/rainbow/xmpp_client.dart`.
-- **Acceptance:** Toggle the OS wifi off/on mid-chat; messages resume delivery without a full re-login. Server's `SmRegistry.claim()` returns non-null on the resume.
-- **Depends on:** nothing; server support already lives in [lib/src/xmpp/session.dart](lib/src/xmpp/session.dart).
+- **Landed in:** `lib/rainbow/xmpp_client.dart` — `_smEnabled` / `_smResumable` / `_smid` / `_hIn` / `_hOut` state machine, `resume()` method, outbound-stanza replay on resume. Phase-J log covers offline coverage, Phase-L covers live MAM+SM smoke.
 
 ### 5.3 · Dark mode / theme toggle (S) — ⬜
 
 - **What:** Add `ThemeMode` state to `RainbowSession`; wire from the profile menu.
 - **Acceptance:** Setting persists across app restarts (SharedPreferences).
 
-### 5.4 · Android target (M) — ⬜
+### 5.4 · Android target (M) — ✅ (2026-09-10)
 
-- **What:** `flutter create --platforms=android .` in the consumer; add `--dart-define=RAINBOW_HOST=10.0.2.2` support in `AppConfig.dev`; document cert-trust flow (already partially in [RUNBOOK § 4c](RUNBOOK.md#4c-android-emulator)).
-- **Acceptance:** Login screen renders on an Android emulator hitting the host-machine stub.
-- **Parity:** Closes "iOS / Android clients" gap for Android.
+- **What:** `flutter create --platforms=android .` in the consumer; add `--dart-define=RAINBOW_HOST=10.0.2.2` support in `AppConfig.dev`; document cert-trust flow.
+- **Landed in:** `android/` scaffold with WebRTC permissions + `minSdk=24`, `--dart-define` config injection (`STUB_SCHEME` / `STUB_HOST` / `STUB_PORT` / `SFU_URL`), `docs/live-smoke-test.md` runbook. HTTP-only `rainbow-stub-smoke.yaml` config on the server side removes the self-signed-cert trust headache.
 
-### 5.5 · Message reactions (M) — ⬜
+### 5.5 · Message reactions (M) — ✅ (2026-09-11)
 
 - **What:** XEP-0444 `<reactions xmlns="urn:xmpp:reactions:0">`. Server: forward + persist a reactions column keyed by message id. Client: emoji picker over a long-press.
-- **Acceptance:** Alice long-presses Bob's message → picks 👍 → both sessions render the reaction with a count.
-- **Parity:** Closes "Reactions" gap vs. WhatsApp + Teams.
+- **Landed in:** stub `session.dart` reactions persist + fan-out; client `XmppReactions` event + `_reactionsChip` tap-to-toggle + long-press sheet.
 
-### 5.6 · Delivery + read receipts UI surface (S) — ⬜
+### 5.6 · Delivery + read receipts UI surface (S) — ✅ (2026-09-11)
 
 - **What:** The wire already forwards XEP-0184 receipts and XEP-0333 chat markers. All that's missing is rendering the ✓ / ✓✓ / read state in the chat bubble.
-- **Where:** `lib/ui/chat_page.dart`, `ChatMessage` model.
-- **Acceptance:** Sending a message shows single check; ✓✓ when server confirms; blue ✓✓ when peer session sends `<displayed/>`.
+- **Landed in:** `ChatMessage.status` + `_stampStatus` reducer in `messages_capsule.dart` — receipts stamp `deliveredAt`, `displayed` markers stamp `seenAt`, and `flutter_chat_ui`'s default status icon promotes automatically. Sent-ack comes via XEP-0198 `<a h="N"/>` (see § 5.2).
 
-### 5.7 · Typing indicator UI surface (S) — ⬜
+### 5.7 · Typing indicator UI surface (S) — ✅ (2026-09-11)
 
 - **What:** Wire already relays chat-states (`<composing/>`, `<paused/>`). Missing is rendering "…is typing" in the chat header.
-- **Where:** `lib/rainbow/xmpp_client.dart` (expose `TypingEvent`), `lib/ui/chat_page.dart`.
-- **Acceptance:** Peer starts typing → chat header shows "typing…" within 500 ms; clears within 5 s of last keystroke.
+- **Landed in:** `XmppChatState` event on the client, `peerIsTyping` reducer in `messages_capsule.dart`, banner row in `ChatPage` / `BubbleChatPage`. Auto-clears after 6 s of no `composing`.
 
-### 5.8 · Threads / quoted replies (M) — ⬜
+### 5.8 · Threads / quoted replies (M) — ✅ (2026-09-11)
 
 - **What:** XEP-0461 `<reply xmlns="urn:xmpp:reply:0" id="orig" to="jid"/>` plus a quoted-body render.
-- **Acceptance:** Long-press a message → "Reply" → composer shows a quoted snippet; peers render the reply as a nested card.
-- **Parity:** Closes "Threads / quoted replies" gap vs. Teams and matches WhatsApp's quote-reply.
+- **Landed in:** `_renderReply` on the client, `_readReplyTargetId` on the incoming path, `ChatReplyBanner` in the composer, quoted-card render above the bubble in `chat_widgets.dart`. Applies to both 1:1 and MUC.
 
 ### 5.9 · Message search UI (M) — ⬜
 
@@ -291,11 +293,11 @@ Rough calendar for one senior full-stack dev, no team politics.
 
 ## 6. Deferred bigger blocks
 
-### 6.1 · SIP / Asterisk WebRTC calling (XL) — 🕒
+### 6.1 · SIP / Asterisk WebRTC calling (XL) — 🕒 superseded
 
-- **Original phase 5** of the roadmap. The [`dart-pbx`](../../dart-pbx) and [`dart-ari`](../../dart-ari) projects are ready to plug into.
-- Delivers 1:1 audio + video calls with JSSIP-shape signalling. **Not** group meetings — those are § 6.5.
-- **Parity delta:** closes "Voice calls" and "Video calls" gaps (2 of 3 Teams/WA table rows).
+- **Original phase 5** of the roadmap. Would have delivered SIP-signalled audio/video via [`dart-pbx`](../../dart-pbx) and [`dart-ari`](../../dart-ari).
+- **Status 2026-09-11:** We took a different route — native XEP-0166 Jingle signalling in the stub + `flutter_webrtc` on the client, verified browser ↔ browser end-to-end. Delivers the same 1:1 audio + video coverage without dragging Asterisk into the loop. Group calls come via ion-sfu (see the client's `docs/ion-sfu-wsl.md`). Asterisk remains available for future PSTN/SIP bridging.
+- **Parity delta:** ✅ closed "Voice calls" and "Video calls" gaps.
 
 ### 6.2 · Server-to-server federation (XL) — 🕒
 
@@ -303,11 +305,11 @@ Rough calendar for one senior full-stack dev, no team politics.
 - Only worth doing if a multi-tenant / multi-server demo is on the horizon.
 - **Parity delta:** matches Teams external federation surface (not WhatsApp — WA is walled).
 
-### 6.3 · Push notifications (L) — 🕒
+### 6.3 · Push notifications (L) — � partial
 
 - Offline delivery via FCM/APNs, proxied by the stub. Requires per-device token registration + native SDK integration on Flutter.
-- **This is the single biggest UX gap** — without it, the app can't wake up on a new message when backgrounded.
-- **Parity delta:** the "backgrounded chat wakes user up" experience that both WhatsApp and Teams take for granted.
+- **Status 2026-09-11:** Token-registration wire is complete — client `pushCapsule` registers a fake per-session token via `POST /users/:id/push-tokens`; stub persists in `push_tokens` SQLite table and emits `would-push user=…` INFO log line when a message can't be delivered because the recipient has no active XMPP session. **Still missing:** actual FCM/APNs sender on the stub side and native push-token acquisition (via `firebase_messaging` or similar) on the client.
+- **Parity delta:** wire-level surface ✓; user-visible push ✗.
 
 ### 6.4 · End-to-end encryption (XL) — ⬜
 
@@ -356,7 +358,145 @@ Rough calendar for one senior full-stack dev, no team politics.
 
 ---
 
-## 7. What's already done — quick history
+## 7. Parity with the Rainbow-React-Native sample
+
+Reference: the parity audit ran on 2026-09-11 against
+`c:\www\node\Rainbow-React-Native-Samples\src` — see the summary in the
+session log. The Flutter client covers **core chat + calls end-to-end**
+and is **ahead** on reactions and edits. What's still missing to reach
+feature parity with the RN reference, ordered by user-visible impact:
+
+### 7.1 · Registration + Forgot-password screens (S) — ⬜
+
+- **Gap:** New users cannot create an account; existing users cannot
+  recover a password. The Flutter client only offers sign-in against
+  the two seeded users (`alice` / `bob`).
+- **Server state:** `POST /self-register/*` and `POST /reset-password/*`
+  are already implemented and tested on the stub (phase 1).
+- **Sketch:** `lib/ui/register_page.dart` (multi-step: email → token
+  → profile), `lib/ui/forgot_password_page.dart`; wire from
+  `LoginPage` via secondary buttons. Extend `rest_client.dart` with
+  `selfRegisterSendEmail` / `selfRegisterConfirm` /
+  `resetPasswordSendEmail` / `resetPasswordConfirm` methods.
+- **Estimate:** S (well under a day).
+
+### 7.2 · MyProfile view + edit (M) — ⬜
+
+- **Gap:** No page to view or edit the signed-in user's own profile —
+  name, phone numbers, emails, job title, company, avatar. The
+  diagnostics overlay shows JID + connection state, but that's it.
+- **Server state:** `PUT /users/:id`, `GET /users/:id`, `POST
+  /users/:id/photo` already work.
+- **Sketch:** `lib/ui/profile_page.dart` (read-only card + Edit
+  button), `lib/ui/profile_edit_page.dart`, `me_capsule.dart` for
+  the reactive slot. Reuse `AttachmentPicker` for avatar.
+- **Estimate:** M.
+
+### 7.3 · 1:1 Conversations list (M) — ⬜
+
+- **Gap:** The Flutter home has Contacts + Bubbles tabs but no
+  "Recent conversations" tab like the RN sample's
+  `Conversations/ConversationsComponent`. Users can reach a peer
+  chat only by drilling in from Contacts. A user with active 1:1
+  threads has no fast way to jump back to them.
+- **Sketch:** New `conversations_capsule.dart` reduces over the peer
+  half of `messages_capsule`'s cache + roster to produce a
+  last-message-per-peer list. `lib/ui/conversations_tab.dart`
+  renders it. Add a third `NavigationDestination` to `HomePage`.
+- **Estimate:** M.
+
+### 7.4 · Call history page (M) — ⬜
+
+- **Gap:** REST call-log CRUD works (`POST/GET/DELETE /users/:id/calllogs`
+  already tested; the CallManager already POSTs every ended call), but
+  there's no UI to browse it. RN sample has `CallLogComponent` with
+  missed / all / voicemail filters.
+- **Sketch:** `call_log_capsule.dart` streams via `GET
+  /users/:id/calllogs` with paging. `lib/ui/call_log_page.dart`
+  renders grouped by day. Add a "Recent calls" tab or route.
+- **Estimate:** M.
+
+### 7.5 · Bubble management + invitations (M) — ⬜
+
+- **Gap:** Bubbles can be created and joined but not edited (name /
+  topic), deleted (owner-only), or member-managed (invite / kick /
+  leave with dialog). Pending invitations are not surfaced anywhere.
+  RN sample has all of these plus a dedicated invitations tab.
+- **Server state:** Bubble REST is already comprehensive
+  (`POST/PUT/DELETE /bubbles/:id`, `POST /bubbles/:id/users`, etc.);
+  the wire is ready.
+- **Sketch:** `lib/ui/bubble_details_page.dart` (member list, invite
+  button, edit, leave/delete), `bubble_invitations_capsule.dart`,
+  optional `InvitationsTab`.
+- **Estimate:** M.
+
+### 7.6 · File browser + download + preview (M) — ⬜
+
+- **Gap:** Files can be attached to a message (upload path works)
+  but there is no "Shared files" list, no re-download of a past
+  attachment, and no image / PDF preview. RN sample has
+  `SharedFile/SharedFileComponent` with sort by date / name / size.
+- **Sketch:** `files_capsule.dart` (paginated `GET
+  /users/:id/files`), `lib/ui/files_page.dart` with a segmented
+  control for sort. `lib/ui/file_preview_page.dart` for images
+  (Flutter's `Image.network`) and a "Open externally" button for
+  everything else (`url_launcher` — new dep).
+- **Estimate:** M.
+
+### 7.7 · Message forward + copy (S) — ⬜
+
+- **Gap:** Long-press sheet in `ChatPage` / `BubbleChatPage` has
+  React / Reply / Edit / Delete but not Forward / Copy. Users cannot
+  re-send a received message to another thread or copy text to the
+  clipboard.
+- **Sketch:** Add two entries to `showMessageActions`. Copy uses
+  `Clipboard.setData`. Forward opens a picker (contact + bubble
+  list, reused from the Bubbles tab) then dispatches
+  `chatActions.sendPeer` / `sendGroup` with the original body +
+  attachment on the chosen target.
+- **Estimate:** S.
+
+### 7.8 · Runtime permissions bootstrap (S) — ⬜
+
+- **Gap:** RN sample explicitly requests camera / mic / contacts /
+  notifications permissions on first launch. Flutter relies on the
+  OS to prompt on first `getUserMedia` / attachment pick — which
+  means a user who taps "call" for the first time on Android sees
+  the permission dialog interrupt the ringing state.
+- **Sketch:** Add `permission_handler` (new dep); post-sign-in,
+  request camera + mic + notifications up front; render a rationale
+  card if any are denied.
+- **Estimate:** S.
+
+### 7.9 · Global search + connectivity banner (M) — ⬜
+
+- **Gap:** RN sample has a `SearchComponent` for people search and a
+  `ConnectivityBar` snackbar. Flutter has neither.
+- **Sketch:** Reuse existing roster capsule for a filter-in-place
+  search bar on Contacts + Bubbles tabs. `connectivity_plus`
+  package (new dep) for the banner. Message search deferred to
+  § 5.9 (needs local persistence).
+- **Estimate:** M.
+
+### 7.10 · Group-call advanced controls (M) — ⬜
+
+- **Gap:** `GroupCallScreen` has mic / camera / leave only. RN
+  `ConferenceCallComponent` also has loudspeaker, lock room,
+  add-participant, delegate host, hide-view / share-view.
+- **Sketch:** Extend `GroupCallManager` with `setLoudspeakerEnabled`
+  / `lockRoom` / `promoteToHost`; wire buttons in
+  `GroupCallScreen`. Requires matching ion-sfu control channel
+  wire — some features may need custom XMPP payloads on top of the
+  MUC-call marker (`urn:rainbow:muc-call:1`).
+- **Estimate:** M.
+
+**Suggested next sprint:** 7.1 + 7.2 + 7.7. All three are user-visible
+gaps that unlock realistic self-serve usage of the Flutter client; the
+server is fully ready for all three; combined estimate is 3–4 days.
+
+---
+
+## 8. What's already done — quick history
 
 For context, the biggest chunks already shipped:
 
@@ -378,7 +518,7 @@ Total: **~41 stub tests + 6 consumer tests, 0 errors on UAT, 2 git repos on `mai
 
 ---
 
-## 8. My picks if you only do one thing next
+## 9. My picks if you only do one thing next
 
 - **Fastest visible win:** [§ 1.1 chat E2E test](#11--11-and-group-chat-end-to-end-test-s--) (S)
 - **Most impressive stack exercise:** [§ 1.2 file upload UI](#12--file-uploaddownload-ui-m--) (M)
