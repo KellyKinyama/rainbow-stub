@@ -382,19 +382,9 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 - **Landed in:** `rainbow_stub_consumer` commit `8e38a4d`. `CallLogEntry` client model wraps the stub's `/users/:id/calllogs` shape; `rest_client.listCallLogs` + `deleteCallLog` cover the missing CRUD. `callLogsCapsule` wraps rearch's `AsyncValue` lifecycle with a refresh + delete controller and hot-reloads on sign-in. `CallLogPage` renders a `SegmentedButton` (All / Missed), swipe-to-delete rows, and directional icons (`call_made`, `call_received`, `call_missed`, `call_end`, `error_outline`). Wired via HomePage popup menu → "Recent calls".
 
-### 7.5 · Bubble management + invitations (M) — ⬜
+### 7.5 · Bubble management + invitations (M) — ✅ (2026-09-11)
 
-- **Gap:** Bubbles can be created and joined but not edited (name /
-  topic), deleted (owner-only), or member-managed (invite / kick /
-  leave with dialog). Pending invitations are not surfaced anywhere.
-  RN sample has all of these plus a dedicated invitations tab.
-- **Server state:** Bubble REST is already comprehensive
-  (`POST/PUT/DELETE /bubbles/:id`, `POST /bubbles/:id/users`, etc.);
-  the wire is ready.
-- **Sketch:** `lib/ui/bubble_details_page.dart` (member list, invite
-  button, edit, leave/delete), `bubble_invitations_capsule.dart`,
-  optional `InvitationsTab`.
-- **Estimate:** M.
+- **Landed in:** `rainbow_stub_consumer` commit `cd9ce3f`. `rest_client` gains `roomInvitations`, `updateRoom`, `deleteRoom`, `inviteToRoom`, `setRoomMemberStatus`. `bubble_invitations_capsule.dart` surfaces pending invites for the signed-in user with an `entries` + `refresh` controller. `chat_actions_capsule` grows `updateBubble` / `deleteBubble` / `inviteToBubble` / `acceptBubbleInvitation` / `declineBubbleInvitation` / `leaveBubble` (accept/decline/leave all route through `setRoomMemberStatus` — accepted / declined). `lib/ui/bubble_details_page.dart` renders the header, accepted-member list, pending-invitation list, and buttons for invite (roster-filtered contact sheet excluding current members), leave (self), owner-only delete, plus an AppBar edit sheet for name + topic. `BubbleChatPage` AppBar carries an `info_outline` action that pushes the details page. `BubblesTab` pins an "Invitations (N)" section above the bubble list with per-card accept / decline buttons that refresh the capsule.
 
 ### 7.6 · File browser + download + preview (M) — ⬜
 
@@ -417,15 +407,9 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 - **Landed in:** `rainbow_stub_consumer` commit `8e38a4d`. `pubspec` adds `permission_handler`; `permissionsCapsule` fires `Permission.[camera, microphone, notification].request()` once on sign-in and exposes a per-slot `PermissionsState`. Web is treated as unsupported (browsers gate on `getUserMedia` per-tab). HomePage renders an `errorContainer` banner with a Retry button whenever any of the three is denied — covers the RN sample's up-front rationale UX.
 
-### 7.9 · Global search + connectivity banner (M) — ⬜
+### 7.9 · Global search + connectivity banner (M) — ✅ (2026-09-11)
 
-- **Gap:** RN sample has a `SearchComponent` for people search and a
-  `ConnectivityBar` snackbar. Flutter has neither.
-- **Sketch:** Reuse existing roster capsule for a filter-in-place
-  search bar on Contacts + Bubbles tabs. `connectivity_plus`
-  package (new dep) for the banner. Message search deferred to
-  § 5.9 (needs local persistence).
-- **Estimate:** M.
+- **Landed in:** `rainbow_stub_consumer` commit `cd9ce3f`. `connectivity_plus` added; `connectivity_capsule.dart` subscribes to `Connectivity().onConnectivityChanged`, seeded with `checkConnectivity()` on mount and exposing a reactive `bool` (true when any transport is non-none). `HomePage` stacks an `_OfflineBanner` (surfaceContainerHighest + `wifi_off`) above content whenever `!online`, coexisting with the permissions banner. `ContactsTab` gains a filter-in-place search bar at the top (case-insensitive `display` / `loginEmail` contains) with a friendly empty state; `BubblesTab` gains an equivalent search bar (name / topic) with the invitations section always pinned above.
 
 ### 7.10 · Group-call advanced controls (M) — ⬜
 
@@ -443,7 +427,9 @@ feature parity with the RN reference, ordered by user-visible impact:
 
 **Sprint 2 (2026-09-11):** ✅ 7.3 + 7.4 + 7.8 landed in `rainbow_stub_consumer` commit `8e38a4d` (Conversations tab, Call-history page, runtime permissions bootstrap).
 
-**Remaining open:** 7.5 (Bubble management + invitations), 7.6 (File browser + download + preview), 7.9 (Global search + connectivity banner), 7.10 (Group-call advanced controls). Combined estimate M+M+M+M ≈ 8–10 days. 7.5 has the highest self-serve unlock — without it there's no way to invite a fresh user into a bubble from the client.
+**Sprint 3 (2026-09-11):** ✅ 7.5 + 7.9 landed in `rainbow_stub_consumer` commit `cd9ce3f` (Bubble management + invitations, filter-in-place search on Contacts + Bubbles, connectivity banner).
+
+**Remaining open:** 7.6 (File browser + download + preview), 7.10 (Group-call advanced controls). Combined estimate M+M ≈ 4–6 days. 7.6 has the higher user-visible value (opens the entire attachment history the RN sample already exposes).
 
 ---
 
