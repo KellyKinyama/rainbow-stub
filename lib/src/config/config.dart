@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:yaml/yaml.dart';
 
+import '../sip/sip_config.dart';
+
 class AuthConfig {
   AuthConfig({
     required this.appId,
@@ -79,6 +81,7 @@ class Config {
     this.tls = const TlsConfig(),
     this.logs = const LogsConfig(),
     this.metrics = const MetricsConfig(),
+    this.sip = SipConfig.disabled,
   });
 
   final String host;
@@ -94,6 +97,7 @@ class Config {
   final TlsConfig tls;
   final LogsConfig logs;
   final MetricsConfig metrics;
+  final SipConfig sip;
 
   /// XMPP domain the server presents to clients.
   String get xmppDomain => publicHost;
@@ -109,6 +113,7 @@ class Config {
     final tlsMap = raw['tls'] as YamlMap?;
     final logsMap = raw['logs'] as YamlMap?;
     final metricsMap = raw['metrics'] as YamlMap?;
+    final sipMap = raw['sip'] as YamlMap?;
     return Config(
       host: raw['host'] as String,
       port: raw['port'] as int,
@@ -149,6 +154,41 @@ class Config {
               enabled: metricsMap['enabled'] as bool? ?? true,
               path: metricsMap['path'] as String? ?? '/metrics',
             ),
+      sip: sipMap == null ? SipConfig.disabled : _parseSip(sipMap),
     );
   }
+}
+
+SipConfig _parseSip(YamlMap m) {
+  final bind = m['bind'] as YamlMap?;
+  final outbound = m['outboundProxy'] as YamlMap?;
+  final anchor = m['mediaAnchor'] as YamlMap?;
+  final rawDids = m['dids'] as YamlMap?;
+  final dids = <String, String>{};
+  if (rawDids != null) {
+    for (final e in rawDids.entries) {
+      dids[e.key.toString()] = e.value.toString();
+    }
+  }
+  return SipConfig(
+    enabled: m['enabled'] as bool? ?? false,
+    domain: m['domain'] as String? ?? 'sip.invalid',
+    bindAddress: bind?['address'] as String? ?? '0.0.0.0',
+    bindPort: bind?['port'] as int? ?? 5060,
+    outboundProxyHost: outbound?['host'] as String? ?? '127.0.0.1',
+    outboundProxyPort: outbound?['port'] as int? ?? 5060,
+    localContactUri:
+        m['localContactUri'] as String? ?? 'sip:b2bua@127.0.0.1:5060',
+    b2buaFromUri: m['b2buaFromUri'] as String? ?? 'sip:rainbow-stub@localhost',
+    mediaAnchor: anchor == null
+        ? null
+        : MediaAnchorConfig(
+            baseUri: anchor['baseUri'] as String,
+            authToken: anchor['authToken'] as String?,
+          ),
+    dids: dids,
+    inboundRingTimeout: Duration(
+      seconds: m['inboundRingTimeoutSeconds'] as int? ?? 45,
+    ),
+  );
 }

@@ -10,6 +10,7 @@ import '../bubbles/bubble_repository.dart';
 import '../messages/message_repository.dart';
 import '../messages/reaction_repository.dart';
 import '../push/push_token_repository.dart';
+import '../sip/sip_gateway.dart';
 import '../users/presence_repository.dart';
 import '../users/roster_repository.dart';
 import '../users/user_repository.dart';
@@ -67,9 +68,10 @@ class SmRegistry {
 
   void park(String smid, XmppWsSession session) {
     // Evict oldest for this user if over cap.
-    final userSmids =
-        _held.entries.where((e) => e.value.userId == session.userId).toList()
-          ..sort((a, b) => a.value.parkedAt.compareTo(b.value.parkedAt));
+    final userSmids = _held.entries
+        .where((e) => e.value.userId == session.userId)
+        .toList()
+      ..sort((a, b) => a.value.parkedAt.compareTo(b.value.parkedAt));
     while (userSmids.length >= maxPerUser) {
       final victim = userSmids.removeAt(0);
       _held.remove(victim.key);
@@ -142,6 +144,7 @@ class XmppWsSession implements XmppSession {
     required this.router,
     required this.smRegistry,
     required this.pushTokens,
+    this.sipGateway,
     this.limits = const XmppLimits(),
   }) : _channel = channel;
 
@@ -157,6 +160,7 @@ class XmppWsSession implements XmppSession {
   final StanzaRouter router;
   final SmRegistry smRegistry;
   final PushTokenRepository pushTokens;
+  final SipGateway? sipGateway;
   final XmppLimits limits;
 
   _State _state = _State.streamOpened;
@@ -364,8 +368,7 @@ class XmppWsSession implements XmppSession {
         el.getAttribute('resume') == 'true' || el.getAttribute('resume') == '1';
     _smid = _newSmId();
     final resumeAttr = _smResumable ? ' resume="true"' : '';
-    final rawSend =
-        '<enabled xmlns="${Ns.sm3}" id="${_esc(_smid)}"'
+    final rawSend = '<enabled xmlns="${Ns.sm3}" id="${_esc(_smid)}"'
         '$resumeAttr max="120"/>';
     if (_channelActive) {
       try {
@@ -625,9 +628,18 @@ class XmppWsSession implements XmppSession {
       _handleJingle(id, el, jingleEl);
       return;
     }
-    // Unknown IQ — return an empty result for get/set so clients don't hang.
+    // Unknown IQ — RFC 6120 §8.2.3: a get/set the server doesn't
+    // understand MUST be answered with <service-unavailable/>, not an
+    // empty result.
     if (type == 'get' || type == 'set') {
-      send('<iq type="result" id="${_esc(id)}"/>');
+      final fromAttr = el.getAttribute('from');
+      send(
+        '<iq type="error" id="${_esc(id)}"'
+        '${fromAttr != null ? ' to="${_esc(fromAttr)}"' : ''}>'
+        '<error type="cancel">'
+        '<service-unavailable xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/>'
+        '</error></iq>',
+      );
     }
   }
 
@@ -681,6 +693,18 @@ class XmppWsSession implements XmppSession {
     // Ack the sender immediately so their iq bookkeeping unwinds; the
     // peer's session-accept / -terminate arrives as a separate iq.
     send('<iq type="result" id="${_esc(iqId)}"/>');
+
+    // SIP-domain callee — hand the Jingle payload to the bridge.
+    final gw = sipGateway;
+    if (gw != null && to.domain == gw.sipDomain) {
+      unawaited(gw.onJingle(
+        callerJid: _jid,
+        calleeJid: to,
+        jingle: jingle,
+      ));
+      return;
+    }
+
     final forwarded = _rewriteFrom(iq);
     router.fanOut(to.local, forwarded);
   }
@@ -985,19 +1009,20 @@ class XmppWsSession implements XmppSession {
         .where((e) => e.name.namespaceUri == Ns.chatStates)
         .firstOrNull;
     final hasReceipt = el.children.whereType<XmlElement>().any(
-      (e) => e.name.namespaceUri == Ns.receipts,
-    );
+          (e) => e.name.namespaceUri == Ns.receipts,
+        );
     final hasMarker = el.children.whereType<XmlElement>().any(
-      (e) => e.name.namespaceUri == Ns.chatMarkers,
-    );
+          (e) => e.name.namespaceUri == Ns.chatMarkers,
+        );
     final hasReactions = el.children.whereType<XmlElement>().any(
-      (e) => e.name.namespaceUri == Ns.reactions,
-    );
+          (e) => e.name.namespaceUri == Ns.reactions,
+        );
     final retractEl = el.children.whereType<XmlElement>().firstWhere(
-      (e) =>
-          e.name.namespaceUri == Ns.messageRetract && e.localName == 'retract',
-      orElse: () => XmlElement(XmlName('none')),
-    );
+          (e) =>
+              e.name.namespaceUri == Ns.messageRetract &&
+              e.localName == 'retract',
+          orElse: () => XmlElement(XmlName('none')),
+        );
     final hasRetract = retractEl.name.local != 'none';
 
     // Group chat (bubble). `to` is <bubbleId>@muc.<domain>.
@@ -1028,8 +1053,7 @@ class XmppWsSession implements XmppSession {
     }
     if (body == null) return;
 
-    final stanzaId =
-        el.getAttribute('id') ??
+    final stanzaId = el.getAttribute('id') ??
         DateTime.now().microsecondsSinceEpoch.toRadixString(16);
     final saved = messages.insert(
       from: _jid,
@@ -1037,10 +1061,29 @@ class XmppWsSession implements XmppSession {
       stanzaId: stanzaId,
       body: body,
     );
+    final forwarded = _rewriteFrom(el, id: saved.stanzaId);
+
+    // SIP-domain recipient — bridge to SIP MESSAGE instead of XMPP fan-out.
+    final gw = sipGateway;
+    if (gw != null && to.domain == gw.sipDomain) {
+      unawaited(gw.sendText(
+        from: _jid,
+        to: to,
+        body: body,
+        stanzaId: saved.stanzaId,
+      ));
+      for (final s in router.sessionsOf(_userId)) {
+        if (identical(s, this)) continue;
+        if (s is XmppWsSession && s._carbonsEnabled) {
+          s.send(_wrapSentCarbon(forwarded));
+        }
+      }
+      return;
+    }
+
     // Note: sender-side ack is now delivered via XEP-0198 stream
     // management (`<a h="…"/>`) — the counter increments naturally
     // when the outgoing echo/forward path pushes stanzas.
-    final forwarded = _rewriteFrom(el, id: saved.stanzaId);
     final delivered = router.fanOut(to.local, forwarded);
     // If the recipient has NO active XMPP session, log every push
     // token we'd notify. In production this is where FCM/APNs would
@@ -1133,12 +1176,11 @@ class XmppWsSession implements XmppSession {
     // XEP-0444 reactions on a MUC message have no <body> — persist the
     // snapshot so MAM replay for later-joining members surfaces them.
     final hasReactions = el.children.whereType<XmlElement>().any(
-      (e) => e.name.namespaceUri == Ns.reactions,
-    );
+          (e) => e.name.namespaceUri == Ns.reactions,
+        );
     if (hasReactions) _persistReactions(el);
 
-    final stanzaId =
-        el.getAttribute('id') ??
+    final stanzaId = el.getAttribute('id') ??
         DateTime.now().microsecondsSinceEpoch.toRadixString(16);
     if (body != null) {
       bubbles.insertMessage(

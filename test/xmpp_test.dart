@@ -229,6 +229,40 @@ void main() {
     expect(bodies, ['one', 'two', 'three']);
     await alice.close();
   });
+
+  test('unknown IQ get/set returns service-unavailable error', () async {
+    final alice = await connect(
+      email: 'alice@rainbow-stub.local',
+      token: aliceToken,
+      resource: 'phone',
+    );
+    final done = Completer<XmlElement>();
+    late StreamSubscription sub;
+    sub = alice.stream.listen((e) {
+      if (e.localName == 'iq' && e.getAttribute('id') == 'u1') {
+        done.complete(e);
+      }
+    });
+    alice.send(
+      '<iq type="get" id="u1">'
+      '<query xmlns="urn:example:unknown:nonsense"/>'
+      '</iq>',
+    );
+    final resp = await done.future.timeout(const Duration(seconds: 3));
+    await sub.cancel();
+    expect(resp.getAttribute('type'), 'error');
+    final err = resp.getElement('error');
+    expect(err, isNotNull);
+    expect(err!.getAttribute('type'), 'cancel');
+    expect(
+      err.getElement(
+        'service-unavailable',
+        namespace: 'urn:ietf:params:xml:ns:xmpp-stanzas',
+      ),
+      isNotNull,
+    );
+    await alice.close();
+  });
 }
 
 class _Xmpp {

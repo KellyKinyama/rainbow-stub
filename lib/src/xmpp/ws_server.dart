@@ -7,6 +7,7 @@ import '../bubbles/bubble_repository.dart';
 import '../messages/message_repository.dart';
 import '../messages/reaction_repository.dart';
 import '../push/push_token_repository.dart';
+import '../sip/sip_gateway.dart';
 import '../users/presence_repository.dart';
 import '../users/roster_repository.dart';
 import '../users/user_repository.dart';
@@ -27,6 +28,7 @@ Handler xmppWebSocketHandler({
   required StanzaRouter router,
   required SmRegistry smRegistry,
   required PushTokenRepository pushTokens,
+  SipGateway? sipGateway,
 }) {
   return webSocketHandler((channel, protocol) async {
     _log.info('ws open protocol=$protocol');
@@ -43,6 +45,7 @@ Handler xmppWebSocketHandler({
       router: router,
       smRegistry: smRegistry,
       pushTokens: pushTokens,
+      sipGateway: sipGateway,
     );
     await session.run();
   }, protocols: const ['xmpp']);
